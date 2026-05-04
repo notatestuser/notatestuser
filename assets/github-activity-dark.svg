@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="980" height="420" viewBox="0 0 980 420" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="350" viewBox="0 0 980 350" role="img" aria-labelledby="title desc">
   <title id="title">GitHub activity breakdown for notatestuser</title>
   <desc id="desc">Two pie charts showing public versus private contributions and readable repository language breakdown.</desc>
   <defs>
@@ -18,16 +18,10 @@
     </style>
   </defs>
 
-  <rect width="980" height="420" rx="18" fill="#0d1117"/>
-  <rect x="18" y="18" width="944" height="384" rx="16" fill="#161b22" stroke="#30363d" filter="url(#softShadow)"/>
-  <rect x="38" y="88" width="430" height="230" rx="12" fill="#111821" stroke="#30363d"/>
-  <rect x="512" y="88" width="430" height="230" rx="12" fill="#111821" stroke="#30363d"/>
+  <rect x="38" y="38" width="430" height="230" rx="12" fill="#111821" stroke="#30363d"/>
+  <rect x="512" y="38" width="430" height="230" rx="12" fill="#111821" stroke="#30363d"/>
 
-  <text x="46" y="52" class="eyebrow" fill="#6e7681">2010-2026 / GITHUB CONTRIBUTION GRAPH</text>
-  <text x="46" y="77" class="title" fill="#f0f6fc">Activity at a glance</text>
-  <text x="760" y="55" class="body" fill="#8b949e">13,678 total</text>
-  <text x="760" y="75" class="muted" fill="#8b949e">generated 2026-05-05 SGT</text>
-
+  <g transform="translate(0 -50)">
   <text x="62" y="119" class="section" fill="#f0f6fc">Public / private</text>
   <g>
     <path d="M 162 211 L 162.000 139.000 A 72 72 0 0 1 229.375 236.389 Z" fill="#2fb8a6"/>
@@ -137,4 +131,5 @@
       <text class="metric" fill="#f0f6fc">54</text>
       <text y="21" class="muted" fill="#8b949e">languages</text>
     </g>
+  </g>
 </svg>
