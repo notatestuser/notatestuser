@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const script = path.join(repoRoot, 'scripts/update-profile-graphics.mjs');
 const fixture = path.join(repoRoot, 'test/fixtures/profile-stats.json');
+const contributionFixture = path.join(repoRoot, 'test/fixtures/contribution-buckets.json');
 
 test('renders slim profile graphics from a fixture', () => {
   const outDir = mkdtempSync(path.join(tmpdir(), 'profile-graphics-'));
@@ -60,4 +61,27 @@ test('uses the next counter when no asset suffix is provided', () => {
   assert.match(readme, /github-activity-light-v0008\.svg/);
   assert.match(readme, /github-activity-dark-v0008\.svg/);
   assert.equal(existsSync(path.join(assetsDir, 'github-activity-light-v0007.svg')), false);
+});
+
+test('keeps visible private repository contributions private', () => {
+  const outDir = mkdtempSync(path.join(tmpdir(), 'profile-graphics-'));
+
+  execFileSync(process.execPath, [
+    script,
+    '--fixture',
+    contributionFixture,
+    '--out-dir',
+    outDir,
+    '--asset-suffix',
+    'visibility'
+  ], { encoding: 'utf8' });
+
+  const light = readFileSync(path.join(outDir, 'assets/github-activity-light-visibility.svg'), 'utf8');
+  assert.match(light, /Private/);
+  assert.match(light, /12 \/ 70\.6%/);
+  assert.match(light, /Public/);
+  assert.match(light, /5 \/ 29\.4%/);
+  assert.match(light, /<path d="M 162 211 L [^"]+ A 72 72 0 1 1 [^"]+" fill="#7c3aed"\/>/);
+  assert.doesNotMatch(light, /Private<\/text>\s*<text[^>]*>5 \/ 29\.4%<\/text>/);
+  assert.doesNotMatch(light, /Public<\/text>\s*<text[^>]*>12 \/ 70\.6%<\/text>/);
 });

@@ -5,7 +5,7 @@
   "totals": {
     "total": 100,
     "publicVisible": 40,
-    "privateRestricted": 60
+    "privateTotal": 60
   },
   "commitRepos": {
     "publicVisible": 2,

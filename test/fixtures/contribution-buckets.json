@@ -1,0 +1,54 @@
+{
+  "user": "octocat",
+  "generatedAt": "2026-05-05T00:00:00.000Z",
+  "years": [2026],
+  "contributionBuckets": {
+    "y2026": {
+      "contributionCalendar": { "totalContributions": 17 },
+      "restrictedContributionsCount": 5,
+      "commitContributionsByRepository": [
+        {
+          "repository": { "nameWithOwner": "octocat/public-repo", "isPrivate": false },
+          "contributions": { "totalCount": 3 }
+        },
+        {
+          "repository": { "nameWithOwner": "octocat/private-repo", "isPrivate": true },
+          "contributions": { "totalCount": 4 }
+        }
+      ],
+      "issueContributionsByRepository": [
+        {
+          "repository": { "nameWithOwner": "octocat/public-repo", "isPrivate": false },
+          "contributions": { "totalCount": 1 }
+        }
+      ],
+      "pullRequestContributionsByRepository": [
+        {
+          "repository": { "nameWithOwner": "octocat/private-repo", "isPrivate": true },
+          "contributions": { "totalCount": 2 }
+        }
+      ],
+      "pullRequestReviewContributionsByRepository": [
+        {
+          "repository": { "nameWithOwner": "octocat/private-repo", "isPrivate": true },
+          "contributions": { "totalCount": 1 }
+        }
+      ],
+      "repositoryContributions": {
+        "nodes": [
+          { "repository": { "nameWithOwner": "octocat/new-public-repo", "isPrivate": false } }
+        ]
+      }
+    }
+  },
+  "commitRepos": {
+    "publicVisible": 1,
+    "privateReadable": 1,
+    "totalReadable": 2
+  },
+  "languageBytes": [
+    { "name": "JavaScript", "bytes": 600 },
+    { "name": "Go", "bytes": 300 },
+    { "name": "Python", "bytes": 100 }
+  ]
+}

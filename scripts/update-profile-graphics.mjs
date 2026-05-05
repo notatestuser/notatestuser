@@ -8,6 +8,12 @@ const USER_AGENT = 'profile-activity-graphics';
 const API_ROOT = 'https://api.github.com';
 const GENERATED_ASSET_RE = /^github-activity-(light|dark)-.+\.svg$/;
 const COUNTER_ASSET_RE = /^github-activity-(?:light|dark)-v(\d+)\.svg$/;
+const REPOSITORY_CONTRIBUTION_GROUPS = [
+  'commitContributionsByRepository',
+  'issueContributionsByRepository',
+  'pullRequestContributionsByRepository',
+  'pullRequestReviewContributionsByRepository'
+];
 
 const LANGUAGE_COLORS = {
   JavaScript: '#f1e05a',
@@ -149,21 +155,11 @@ async function fetchProfileStats({ login, token }) {
   const years = await fetchContributionYears({ login, token });
   const contributionData = await fetchContributionBuckets({ login, years, token });
 
-  const totals = {
-    total: 0,
-    publicVisible: 0,
-    privateRestricted: 0
-  };
+  const totals = contributionVisibilityTotals({ contributionData, years });
   const publicCommitRepos = new Set();
 
   for (const year of years) {
     const bucket = contributionData[`y${year}`];
-    const total = bucket.contributionCalendar.totalContributions;
-    const privateRestricted = bucket.restrictedContributionsCount;
-    totals.total += total;
-    totals.privateRestricted += privateRestricted;
-    totals.publicVisible += total - privateRestricted;
-
     for (const item of bucket.commitContributionsByRepository) {
       if (!item.repository.isPrivate) publicCommitRepos.add(item.repository.nameWithOwner);
     }
@@ -218,6 +214,22 @@ async function fetchContributionBuckets({ login, years, token }) {
       restrictedContributionsCount
       commitContributionsByRepository(maxRepositories: 100) {
         repository { nameWithOwner isPrivate }
+        contributions(first: 1) { totalCount }
+      }
+      issueContributionsByRepository(maxRepositories: 100) {
+        repository { nameWithOwner isPrivate }
+        contributions(first: 1) { totalCount }
+      }
+      pullRequestContributionsByRepository(maxRepositories: 100) {
+        repository { nameWithOwner isPrivate }
+        contributions(first: 1) { totalCount }
+      }
+      pullRequestReviewContributionsByRepository(maxRepositories: 100) {
+        repository { nameWithOwner isPrivate }
+        contributions(first: 1) { totalCount }
+      }
+      repositoryContributions(first: 100) {
+        nodes { repository { nameWithOwner isPrivate } }
       }
     }`;
   }).join('\n');
@@ -337,18 +349,84 @@ function apiHeaders(token) {
 }
 
 function normalizeStats(input) {
+  if (input.contributionBuckets) {
+    return normalizeStats({
+      ...input,
+      contributionBuckets: undefined,
+      totals: contributionVisibilityTotals({
+        contributionData: input.contributionBuckets,
+        years: input.years || []
+      })
+    });
+  }
+
   const languageBytes = [...(input.languageBytes || [])].sort((a, b) => b.bytes - a.bytes);
   const topLanguages = input.topLanguages || topLanguageSlices(languageBytes);
+  const totals = normalizeTotals(input.totals);
   return {
     user: input.user,
     generatedAt: input.generatedAt || new Date().toISOString(),
     years: input.years || [],
-    totals: input.totals,
+    totals,
     commitRepos: input.commitRepos || {},
     languageBytes,
     readableLanguageCount: input.readableLanguageCount || languageBytes.length,
     topLanguages
   };
+}
+
+function contributionVisibilityTotals({ contributionData, years }) {
+  const totals = {
+    total: 0,
+    publicVisible: 0,
+    privateTotal: 0
+  };
+
+  for (const year of years) {
+    const bucket = contributionData[`y${year}`];
+    if (!bucket) continue;
+
+    const yearTotals = contributionBucketVisibilityTotals(bucket);
+    totals.publicVisible += yearTotals.publicVisible;
+    totals.privateTotal += yearTotals.privateTotal;
+  }
+
+  totals.total = totals.publicVisible + totals.privateTotal;
+  return totals;
+}
+
+function contributionBucketVisibilityTotals(bucket) {
+  const totals = {
+    publicVisible: 0,
+    privateTotal: Number(bucket.restrictedContributionsCount || 0)
+  };
+
+  for (const group of REPOSITORY_CONTRIBUTION_GROUPS) {
+    for (const item of bucket[group] || []) {
+      addRepositoryContribution(totals, item.repository, item.contributions?.totalCount);
+    }
+  }
+
+  for (const item of bucket.repositoryContributions?.nodes || []) {
+    addRepositoryContribution(totals, item.repository, 1);
+  }
+
+  return totals;
+}
+
+function addRepositoryContribution(totals, repository, count) {
+  const value = Number(count || 0);
+  if (value <= 0 || !repository) return;
+
+  if (repository.isPrivate) totals.privateTotal += value;
+  else totals.publicVisible += value;
+}
+
+function normalizeTotals(totals = {}) {
+  const publicVisible = Number(totals.publicVisible || 0);
+  const privateTotal = Number(totals.privateTotal ?? totals.privateVisible ?? totals.privateRestricted ?? 0);
+  const total = Number(totals.total ?? publicVisible + privateTotal);
+  return { total, publicVisible, privateTotal };
 }
 
 function topLanguageSlices(languageBytes) {
@@ -411,7 +489,7 @@ function renderSvg({ stats, themeName }) {
   const totalContributions = stats.totals.total;
   const contribItems = [
     { label: 'Public', value: stats.totals.publicVisible, color: '#2fb8a6' },
-    { label: 'Private', value: stats.totals.privateRestricted, color: '#7c3aed' }
+    { label: 'Private', value: stats.totals.privateTotal, color: '#7c3aed' }
   ];
   const languageItems = stats.topLanguages.map((language, index) => ({
     ...language,
@@ -459,8 +537,8 @@ function renderSvg({ stats, themeName }) {
     y: 170,
     color: '#7c3aed',
     label: 'Private',
-    value: formatInteger(stats.totals.privateRestricted),
-    percentage: percent(stats.totals.privateRestricted, totalContributions),
+    value: formatInteger(stats.totals.privateTotal),
+    percentage: percent(stats.totals.privateTotal, totalContributions),
     theme
   })}
   ${legendTwoLine({
