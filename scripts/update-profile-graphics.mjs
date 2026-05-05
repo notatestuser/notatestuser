@@ -429,7 +429,7 @@ function renderSvg({ stats, themeName }) {
     });
   }).join('');
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="980" height="242" viewBox="0 0 980 242" role="img" aria-labelledby="title desc">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="980" height="225" viewBox="0 0 980 225" role="img" aria-labelledby="title desc">
   <title id="title">GitHub activity breakdown for ${escapeXml(stats.user)}</title>
   <desc id="desc">Two pie charts showing public versus private contributions and readable repository language breakdown.</desc>
   <defs>
@@ -443,8 +443,8 @@ function renderSvg({ stats, themeName }) {
     </style>
   </defs>
 
-  <rect x="38" y="12.5" width="430" height="229" rx="12" fill="${theme.card}" stroke="${theme.stroke}"/>
-  <rect x="512" y="12.5" width="430" height="229" rx="12" fill="${theme.card}" stroke="${theme.stroke}"/>
+  <rect x="38" y="12.5" width="430" height="212" rx="12" fill="${theme.card}" stroke="${theme.stroke}"/>
+  <rect x="512" y="12.5" width="430" height="212" rx="12" fill="${theme.card}" stroke="${theme.stroke}"/>
 
   <g transform="translate(0 -76)">
   <text x="62" y="119" class="section" fill="${theme.text}">Public / private</text>

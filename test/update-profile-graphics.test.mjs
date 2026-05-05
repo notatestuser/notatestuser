@@ -32,7 +32,7 @@ test('renders slim profile graphics from a fixture', () => {
   assert.equal(existsSync(darkPath), true);
 
   const light = readFileSync(lightPath, 'utf8');
-  assert.match(light, /width="980" height="242"/);
+  assert.match(light, /width="980" height="225"/);
   assert.match(light, /Public \/ private/);
   assert.match(light, /Language mix/);
   assert.doesNotMatch(light, /visible commits|opened PRs|reviews|public repos|private repos/);

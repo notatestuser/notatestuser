@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="980" height="242" viewBox="0 0 980 242" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="225" viewBox="0 0 980 225" role="img" aria-labelledby="title desc">
   <title id="title">GitHub activity breakdown for notatestuser</title>
   <desc id="desc">Two pie charts showing public versus private contributions and readable repository language breakdown.</desc>
   <defs>
@@ -12,8 +12,8 @@
     </style>
   </defs>
 
-  <rect x="38" y="12.5" width="430" height="229" rx="12" fill="#ffffff" stroke="#d0d7de"/>
-  <rect x="512" y="12.5" width="430" height="229" rx="12" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="38" y="12.5" width="430" height="212" rx="12" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="512" y="12.5" width="430" height="212" rx="12" fill="#ffffff" stroke="#d0d7de"/>
 
   <g transform="translate(0 -76)">
   <text x="62" y="119" class="section" fill="#24292f">Public / private</text>
