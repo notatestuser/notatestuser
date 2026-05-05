@@ -1,0 +1,20 @@
+{
+  "user": "octocat",
+  "generatedAt": "2026-05-05T00:00:00.000Z",
+  "years": [2025, 2026],
+  "totals": {
+    "total": 100,
+    "publicVisible": 40,
+    "privateRestricted": 60
+  },
+  "commitRepos": {
+    "publicVisible": 2,
+    "privateReadable": 1,
+    "totalReadable": 3
+  },
+  "languageBytes": [
+    { "name": "JavaScript", "bytes": 600 },
+    { "name": "Go", "bytes": 300 },
+    { "name": "Python", "bytes": 100 }
+  ]
+}

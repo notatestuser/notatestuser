@@ -1,0 +1,9 @@
+{
+  "name": "notatestuser-profile",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "update:graphics": "node scripts/update-profile-graphics.mjs"
+  }
+}
