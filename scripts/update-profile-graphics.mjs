@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -8,12 +9,115 @@ const USER_AGENT = 'profile-activity-graphics';
 const API_ROOT = 'https://api.github.com';
 const GENERATED_ASSET_RE = /^github-activity-(light|dark)-.+\.svg$/;
 const COUNTER_ASSET_RE = /^github-activity-(?:light|dark)-v(\d+)\.svg$/;
+const REQUEST_TIMEOUT_MS = 30000;
 const REPOSITORY_CONTRIBUTION_GROUPS = [
   'commitContributionsByRepository',
   'issueContributionsByRepository',
   'pullRequestContributionsByRepository',
   'pullRequestReviewContributionsByRepository'
 ];
+const COMMIT_LANGUAGE_CACHE_VERSION = 2;
+const DEFAULT_LANGUAGE_CACHE = '.cache/profile-activity-language-cache.json';
+
+const LANGUAGE_BY_EXTENSION = new Map([
+  ['.c', 'C'],
+  ['.cc', 'C++'],
+  ['.cpp', 'C++'],
+  ['.cxx', 'C++'],
+  ['.h', 'C'],
+  ['.hpp', 'C++'],
+  ['.hh', 'C++'],
+  ['.cs', 'C#'],
+  ['.css', 'CSS'],
+  ['.dart', 'Dart'],
+  ['.ex', 'Elixir'],
+  ['.exs', 'Elixir'],
+  ['.go', 'Go'],
+  ['.html', 'HTML'],
+  ['.htm', 'HTML'],
+  ['.java', 'Java'],
+  ['.js', 'JavaScript'],
+  ['.jsx', 'JavaScript'],
+  ['.mjs', 'JavaScript'],
+  ['.cjs', 'JavaScript'],
+  ['.kt', 'Kotlin'],
+  ['.kts', 'Kotlin'],
+  ['.m', 'Objective-C'],
+  ['.mm', 'Objective-C++'],
+  ['.php', 'PHP'],
+  ['.py', 'Python'],
+  ['.pyi', 'Python'],
+  ['.rb', 'Ruby'],
+  ['.rs', 'Rust'],
+  ['.sass', 'CSS'],
+  ['.scala', 'Scala'],
+  ['.scss', 'CSS'],
+  ['.sh', 'Shell'],
+  ['.bash', 'Shell'],
+  ['.fish', 'Shell'],
+  ['.zsh', 'Shell'],
+  ['.sol', 'Solidity'],
+  ['.svelte', 'Svelte'],
+  ['.swift', 'Swift'],
+  ['.ts', 'TypeScript'],
+  ['.tsx', 'TypeScript'],
+  ['.mts', 'TypeScript'],
+  ['.cts', 'TypeScript'],
+  ['.vue', 'Vue']
+]);
+
+const LANGUAGE_BY_BASENAME = new Map([
+  ['cmakelists.txt', 'CMake'],
+  ['dockerfile', 'Dockerfile'],
+  ['gemfile', 'Ruby'],
+  ['makefile', 'Makefile'],
+  ['rakefile', 'Ruby']
+]);
+
+const IGNORED_BASENAMES = new Set([
+  'cargo.lock',
+  'go.mod',
+  'go.sum',
+  'license',
+  'package-lock.json',
+  'pnpm-lock.yaml',
+  'readme',
+  'readme.md',
+  'yarn.lock'
+]);
+
+const IGNORED_EXTENSIONS = new Set([
+  '.avif',
+  '.bmp',
+  '.csv',
+  '.env',
+  '.eot',
+  '.gif',
+  '.ico',
+  '.ini',
+  '.jpeg',
+  '.jpg',
+  '.json',
+  '.lock',
+  '.map',
+  '.md',
+  '.markdown',
+  '.pdf',
+  '.png',
+  '.snap',
+  '.sum',
+  '.svg',
+  '.toml',
+  '.tsv',
+  '.ttf',
+  '.txt',
+  '.webp',
+  '.woff',
+  '.woff2',
+  '.xml',
+  '.yaml',
+  '.yml'
+]);
 
 const LANGUAGE_COLORS = {
   JavaScript: '#f1e05a',
@@ -31,6 +135,18 @@ const LANGUAGE_COLORS = {
   Shell: '#89e051',
   Kotlin: '#a97bff',
   Ruby: '#701516',
+  'C++': '#f34b7d',
+  CMake: '#da3434',
+  Dart: '#00b4ab',
+  Dockerfile: '#384d54',
+  Elixir: '#6e4a7e',
+  Makefile: '#427819',
+  'Objective-C': '#438eff',
+  'Objective-C++': '#6866fb',
+  Scala: '#c22d40',
+  Solidity: '#aa6746',
+  Svelte: '#ff3e00',
+  Vue: '#41b883',
   Other: '#8b5cf6'
 };
 
@@ -74,7 +190,11 @@ async function main() {
 
   const stats = options.fixture
     ? normalizeStats(JSON.parse(await readFile(options.fixture, 'utf8')))
-    : await fetchProfileStats({ login, token: requireToken() });
+    : await fetchProfileStats({
+      login,
+      token: requireToken(),
+      languageCachePath: options.languageCache || path.join(options.outDir, DEFAULT_LANGUAGE_CACHE)
+    });
 
   await writeProfileGraphics({ outDir: options.outDir, stats, requestedSuffix: options.assetSuffix });
 
@@ -89,6 +209,7 @@ function parseArgs(args) {
     login: null,
     fixture: null,
     assetSuffix: null,
+    languageCache: null,
     commit: false,
     push: false
   };
@@ -99,6 +220,7 @@ function parseArgs(args) {
     else if (arg === '--login') options.login = requireValue(args, ++i, arg);
     else if (arg === '--fixture') options.fixture = requireValue(args, ++i, arg);
     else if (arg === '--asset-suffix') options.assetSuffix = sanitizeSuffix(requireValue(args, ++i, arg));
+    else if (arg === '--language-cache') options.languageCache = requireValue(args, ++i, arg);
     else if (arg === '--commit') options.commit = true;
     else if (arg === '--push') {
       options.commit = true;
@@ -127,6 +249,7 @@ Options:
   --login <login>          GitHub user login. Defaults to GITHUB_LOGIN or repo owner.
   --out-dir <path>         Repository root to update. Defaults to current directory.
   --asset-suffix <suffix>  Asset filename suffix. Defaults to next counter.
+  --language-cache <path>  Commit language cache path. Defaults to ${DEFAULT_LANGUAGE_CACHE}.
   --fixture <path>         Render from a precomputed stats fixture instead of GitHub.
   --commit                 Commit generated changes if any.
   --push                   Commit and push generated changes if any.
@@ -151,7 +274,7 @@ function detectLoginFromRemote() {
   }
 }
 
-async function fetchProfileStats({ login, token }) {
+async function fetchProfileStats({ login, token, languageCachePath }) {
   const years = await fetchContributionYears({ login, token });
   const contributionData = await fetchContributionBuckets({ login, years, token });
 
@@ -167,7 +290,13 @@ async function fetchProfileStats({ login, token }) {
 
   const privateCommitRepos = await fetchPrivateCommitRepos({ login, token });
   const allCommitRepos = [...new Set([...publicCommitRepos, ...privateCommitRepos])];
-  const languageBytes = await fetchLanguageTotals({ repos: allCommitRepos, token });
+  const languageBytes = await fetchCommitLanguageTotals({
+    repos: allCommitRepos,
+    login,
+    token,
+    cachePath: languageCachePath,
+    since: `${Math.min(...years)}-01-01T00:00:00Z`
+  });
 
   return normalizeStats({
     user: login,
@@ -260,47 +389,137 @@ async function fetchPrivateCommitRepos({ login, token }) {
       }
     });
   } catch (error) {
-    console.warn(`Skipping private repo language data: ${error.message}`);
+    if (isRateLimitError(error)) throw error;
+    console.warn(`Skipping private commit repository data: ${error.message}`);
     return [];
   }
 
-  const repos = [];
-  for (const repo of privateRepos) {
+  const repos = await mapLimit(privateRepos, 4, async (repo) => {
     try {
       const commits = await restJson({
         token,
         pathName: `/repos/${repo.full_name}/commits`,
         params: { author: login, per_page: '1' }
       });
-      if (Array.isArray(commits) && commits.length > 0) repos.push(repo.full_name);
-    } catch {
+      return Array.isArray(commits) && commits.length > 0 ? repo.full_name : null;
+    } catch (error) {
+      if (isRateLimitError(error)) throw error;
       // Empty, archived, or inaccessible repositories are not useful for this chart.
+      return null;
     }
-  }
-  return repos;
+  });
+  return repos.filter(Boolean);
 }
 
-async function fetchLanguageTotals({ repos, token }) {
-  const totals = new Map();
-  for (const repo of repos) {
-    try {
-      const languages = await restJson({ token, pathName: `/repos/${repo}/languages` });
-      for (const [language, bytes] of Object.entries(languages)) {
-        totals.set(language, (totals.get(language) || 0) + bytes);
+async function fetchCommitLanguageTotals({ repos, login, token, cachePath, since }) {
+  console.log(`Collecting changed-file languages from ${repos.length} readable commit repositories.`);
+  const cache = await loadCommitLanguageCache(cachePath);
+  const commitGroups = await mapLimit(repos, 4, async (repo) => listAuthoredCommits({
+    repo,
+    login,
+    token,
+    since
+  }));
+  const commits = commitGroups.flat();
+  console.log(`Inspecting ${commits.length} authored commits for changed source files.`);
+  let cacheMisses = 0;
+  let savedMisses = 0;
+  const commitLanguageEntries = [];
+
+  for (let i = 0; i < commits.length; i += 100) {
+    const batch = commits.slice(i, i + 100);
+    const batchLanguageEntries = await mapLimit(batch, 4, async ({ repo, sha }) => {
+      const key = commitCacheKey({ repo, sha });
+      if (cache.commits[key]) return cache.commits[key];
+
+      try {
+        const commit = await restJson({ token, pathName: `/repos/${repo}/commits/${sha}` });
+        const files = (commit.files || []).map((file) => ({
+            filename: file.filename,
+            additions: Number(file.additions || 0),
+            deletions: Number(file.deletions || 0),
+            changes: Number(file.changes || 0)
+          }));
+        const entry = {
+          languages: languageTotalsFromCommitFileChanges([{ files }])
+        };
+        cache.commits[key] = entry;
+        cacheMisses += 1;
+        return entry;
+      } catch (error) {
+        if (isRateLimitError(error)) throw error;
+        return { languages: [] };
       }
-    } catch {
-      // Repositories can disappear or become inaccessible after the contribution was made.
+    });
+
+    commitLanguageEntries.push(...batchLanguageEntries);
+    if (cacheMisses > savedMisses) {
+      await saveCommitLanguageCache(cachePath, cache);
+      savedMisses = cacheMisses;
     }
+    console.log(`Inspected ${Math.min(i + batch.length, commits.length)}/${commits.length} commits (${cacheMisses} fetched).`);
   }
-  return [...totals.entries()]
-    .map(([name, bytes]) => ({ name, bytes }))
-    .sort((a, b) => b.bytes - a.bytes);
+
+  return languageTotalsFromCommitLanguageEntries(commitLanguageEntries);
+}
+
+function commitCacheKey({ repo, sha }) {
+  return createHash('sha256').update(`${repo}@${sha}`).digest('hex');
+}
+
+function isRateLimitError(error) {
+  return /rate limit|secondary rate|abuse detection/i.test(error.message || '');
+}
+
+async function listAuthoredCommits({ repo, login, token, since }) {
+  try {
+    const params = { author: login, per_page: '100' };
+    if (since) params.since = since;
+    const commits = await paginateRest({ token, pathName: `/repos/${repo}/commits`, params });
+    return commits.map((commit) => ({ repo, sha: commit.sha })).filter((commit) => commit.sha);
+  } catch (error) {
+    if (isRateLimitError(error)) throw error;
+    // Repositories can disappear or become inaccessible after the contribution was made.
+    return [];
+  }
+}
+
+async function loadCommitLanguageCache(cachePath) {
+  try {
+    const cache = JSON.parse(await readFile(cachePath, 'utf8'));
+    if (cache.version === COMMIT_LANGUAGE_CACHE_VERSION && cache.commits && typeof cache.commits === 'object') {
+      return cache;
+    }
+  } catch {
+    // Missing or invalid cache; rebuild it from GitHub.
+  }
+  return { version: COMMIT_LANGUAGE_CACHE_VERSION, commits: {} };
+}
+
+async function saveCommitLanguageCache(cachePath, cache) {
+  await mkdir(path.dirname(cachePath), { recursive: true });
+  await writeFile(cachePath, `${JSON.stringify(cache, null, 2)}\n`);
+}
+
+async function mapLimit(items, limit, mapper) {
+  const results = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      results[index] = await mapper(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 async function graphql({ token, query, variables }) {
   const response = await fetch(`${API_ROOT}/graphql`, {
     method: 'POST',
     headers: apiHeaders(token),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     body: JSON.stringify({ query, variables })
   });
   const payload = await response.json();
@@ -326,7 +545,10 @@ async function paginateRest({ token, pathName, params = {} }) {
 async function restJson({ token, pathName, params = {} }) {
   const url = new URL(`${API_ROOT}${pathName}`);
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
-  const response = await fetch(url, { headers: apiHeaders(token) });
+  const response = await fetch(url, {
+    headers: apiHeaders(token),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+  });
   if (!response.ok) {
     let message = response.statusText;
     try {
@@ -334,7 +556,7 @@ async function restJson({ token, pathName, params = {} }) {
     } catch {
       // Keep the HTTP status text.
     }
-    throw new Error(`${pathName} failed: ${message}`);
+    throw new Error(`${pathName} failed (${response.status}): ${message}`);
   }
   return response.json();
 }
@@ -360,7 +582,10 @@ function normalizeStats(input) {
     });
   }
 
-  const languageBytes = [...(input.languageBytes || [])].sort((a, b) => b.bytes - a.bytes);
+  const rawLanguageBytes = input.commitFileChanges
+    ? languageTotalsFromCommitFileChanges(input.commitFileChanges)
+    : input.languageBytes || [];
+  const languageBytes = [...rawLanguageBytes].sort((a, b) => b.bytes - a.bytes);
   const topLanguages = input.topLanguages || topLanguageSlices(languageBytes);
   const totals = normalizeTotals(input.totals);
   return {
@@ -373,6 +598,55 @@ function normalizeStats(input) {
     readableLanguageCount: input.readableLanguageCount || languageBytes.length,
     topLanguages
   };
+}
+
+function languageTotalsFromCommitFileChanges(commitFileChanges) {
+  const totals = new Map();
+  for (const changeSet of commitFileChanges || []) {
+    for (const file of changeSet.files || []) {
+      const language = languageForPath(file.filename);
+      if (!language) continue;
+
+      const additions = Number(file.additions || 0);
+      const deletions = Number(file.deletions || 0);
+      const changes = additions + deletions || Number(file.changes || 0);
+      if (changes <= 0) continue;
+      totals.set(language, (totals.get(language) || 0) + changes);
+    }
+  }
+  return [...totals.entries()]
+    .map(([name, bytes]) => ({ name, bytes }))
+    .sort((a, b) => b.bytes - a.bytes);
+}
+
+function languageTotalsFromCommitLanguageEntries(entries) {
+  const totals = new Map();
+  for (const entry of entries || []) {
+    for (const language of entry.languages || []) {
+      const bytes = Number(language.bytes || 0);
+      if (bytes <= 0) continue;
+      totals.set(language.name, (totals.get(language.name) || 0) + bytes);
+    }
+  }
+  return [...totals.entries()]
+    .map(([name, bytes]) => ({ name, bytes }))
+    .sort((a, b) => b.bytes - a.bytes);
+}
+
+function languageForPath(filename) {
+  const normalized = String(filename || '').replaceAll('\\', '/');
+  const basename = normalized.split('/').pop()?.toLowerCase();
+  if (!basename || IGNORED_BASENAMES.has(basename)) return null;
+  if (LANGUAGE_BY_BASENAME.has(basename)) return LANGUAGE_BY_BASENAME.get(basename);
+
+  const extension = languageExtension(basename);
+  if (!extension || IGNORED_EXTENSIONS.has(extension)) return null;
+  return LANGUAGE_BY_EXTENSION.get(extension) || null;
+}
+
+function languageExtension(basename) {
+  if (basename.endsWith('.d.ts')) return '.ts';
+  return path.extname(basename);
 }
 
 function contributionVisibilityTotals({ contributionData, years }) {
@@ -478,7 +752,7 @@ function renderReadme({ lightAsset, darkAsset }) {
   return `<div align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/${darkAsset}">
-    <img src="assets/${lightAsset}" width="980" alt="GitHub activity breakdown showing public and private contributions plus language usage">
+    <img src="assets/${lightAsset}" width="980" alt="GitHub activity breakdown showing public and private contributions plus changed-file language usage">
   </picture>
 </div>
 `;
@@ -509,7 +783,7 @@ function renderSvg({ stats, themeName }) {
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="980" height="225" viewBox="0 0 980 225" role="img" aria-labelledby="title desc">
   <title id="title">GitHub activity breakdown for ${escapeXml(stats.user)}</title>
-  <desc id="desc">Two pie charts showing public versus private contributions and readable repository language breakdown.</desc>
+  <desc id="desc">Two pie charts showing public versus private contributions and changed-file language breakdown.</desc>
   <defs>
     <style>
       text { font-family: -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif; }

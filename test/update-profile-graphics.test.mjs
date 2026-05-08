@@ -9,6 +9,7 @@ const repoRoot = path.resolve(import.meta.dirname, '..');
 const script = path.join(repoRoot, 'scripts/update-profile-graphics.mjs');
 const fixture = path.join(repoRoot, 'test/fixtures/profile-stats.json');
 const contributionFixture = path.join(repoRoot, 'test/fixtures/contribution-buckets.json');
+const changedFileFixture = path.join(repoRoot, 'test/fixtures/changed-file-language-stats.json');
 
 test('renders slim profile graphics from a fixture', () => {
   const outDir = mkdtempSync(path.join(tmpdir(), 'profile-graphics-'));
@@ -84,4 +85,26 @@ test('keeps visible private repository contributions private', () => {
   assert.match(light, /<path d="M 162 211 L [^"]+ A 72 72 0 1 1 [^"]+" fill="#7c3aed"\/>/);
   assert.doesNotMatch(light, /Private<\/text>\s*<text[^>]*>5 \/ 29\.4%<\/text>/);
   assert.doesNotMatch(light, /Public<\/text>\s*<text[^>]*>12 \/ 70\.6%<\/text>/);
+});
+
+test('renders language mix from changed source files', () => {
+  const outDir = mkdtempSync(path.join(tmpdir(), 'profile-graphics-'));
+
+  execFileSync(process.execPath, [
+    script,
+    '--fixture',
+    changedFileFixture,
+    '--out-dir',
+    outDir,
+    '--asset-suffix',
+    'changes'
+  ], { encoding: 'utf8' });
+
+  const light = readFileSync(path.join(outDir, 'assets/github-activity-light-changes.svg'), 'utf8');
+  assert.match(light, /<text x="632" y="207" text-anchor="middle" class="centerBig" fill="#24292f">3<\/text>/);
+  assert.match(light, /Rust<\/text>\s*<text[^>]*>60\.0%<\/text>/);
+  assert.match(light, /TypeScript<\/text>\s*<text[^>]*>20\.0%<\/text>/);
+  assert.match(light, /JavaScript<\/text>\s*<text[^>]*>20\.0%<\/text>/);
+  assert.doesNotMatch(light, /Go<\/text>/);
+  assert.doesNotMatch(light, /Markdown<\/text>|JSON<\/text>/);
 });

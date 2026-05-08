@@ -1,0 +1,32 @@
+{
+  "user": "octocat",
+  "generatedAt": "2026-05-09T00:00:00.000Z",
+  "years": [2026],
+  "totals": {
+    "total": 50,
+    "publicVisible": 20,
+    "privateTotal": 30
+  },
+  "commitFileChanges": [
+    {
+      "repo": "octocat/example",
+      "sha": "1111111",
+      "files": [
+        { "filename": "src/lib.rs", "additions": 20, "deletions": 10 },
+        { "filename": "README.md", "additions": 200, "deletions": 0 },
+        { "filename": "package.json", "additions": 40, "deletions": 20 }
+      ]
+    },
+    {
+      "repo": "octocat/example",
+      "sha": "2222222",
+      "files": [
+        { "filename": "src/app.ts", "additions": 7, "deletions": 3 },
+        { "filename": "src/index.js", "additions": 6, "deletions": 4 }
+      ]
+    }
+  ],
+  "languageBytes": [
+    { "name": "Go", "bytes": 999999 }
+  ]
+}
