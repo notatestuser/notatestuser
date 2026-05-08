@@ -713,18 +713,61 @@ function topLanguageSlices(languageBytes) {
 async function writeProfileGraphics({ outDir, stats, requestedSuffix }) {
   const assetsDir = path.join(outDir, 'assets');
   await mkdir(assetsDir, { recursive: true });
+  const renderedLight = renderSvg({ stats, themeName: 'light' });
+  const renderedDark = renderSvg({ stats, themeName: 'dark' });
+
+  if (!requestedSuffix) {
+    const currentAssets = await currentReadmeAssets(outDir);
+    if (currentAssets) {
+      const currentLightPath = path.join(assetsDir, currentAssets.lightAsset);
+      const currentDarkPath = path.join(assetsDir, currentAssets.darkAsset);
+      try {
+        const [currentLight, currentDark, currentReadme] = await Promise.all([
+          readFile(currentLightPath, 'utf8'),
+          readFile(currentDarkPath, 'utf8'),
+          readFile(path.join(outDir, 'README.md'), 'utf8')
+        ]);
+        if (currentLight === renderedLight && currentDark === renderedDark) {
+          const nextReadme = renderReadme(currentAssets);
+          if (currentReadme !== nextReadme) {
+            await writeFile(path.join(outDir, 'README.md'), nextReadme);
+            console.log('Updated README for unchanged profile graphics.');
+          } else {
+            console.log('Profile graphics unchanged; keeping current asset paths.');
+          }
+          return;
+        }
+      } catch {
+        // Fall through to writing fresh assets when current paths are incomplete.
+      }
+    }
+  }
 
   const suffix = requestedSuffix || await nextAssetSuffix(assetsDir);
   const lightAsset = `github-activity-light-${suffix}.svg`;
   const darkAsset = `github-activity-dark-${suffix}.svg`;
 
   await cleanupOldAssets(assetsDir, new Set([lightAsset, darkAsset]));
-  await writeFile(path.join(assetsDir, lightAsset), renderSvg({ stats, themeName: 'light' }));
-  await writeFile(path.join(assetsDir, darkAsset), renderSvg({ stats, themeName: 'dark' }));
+  await writeFile(path.join(assetsDir, lightAsset), renderedLight);
+  await writeFile(path.join(assetsDir, darkAsset), renderedDark);
   await writeFile(path.join(outDir, 'README.md'), renderReadme({ lightAsset, darkAsset }));
 
   console.log(`Wrote ${path.join('assets', lightAsset)}`);
   console.log(`Wrote ${path.join('assets', darkAsset)}`);
+}
+
+async function currentReadmeAssets(outDir) {
+  try {
+    const readme = await readFile(path.join(outDir, 'README.md'), 'utf8');
+    const darkMatch = readme.match(/srcset="assets\/(github-activity-dark-[^"]+\.svg)"/);
+    const lightMatch = readme.match(/<img src="assets\/(github-activity-light-[^"]+\.svg)"/);
+    if (darkMatch && lightMatch) {
+      return { darkAsset: darkMatch[1], lightAsset: lightMatch[1] };
+    }
+  } catch {
+    // Missing README means there is no existing profile graphic to preserve.
+  }
+  return null;
 }
 
 async function cleanupOldAssets(assetsDir, keep) {

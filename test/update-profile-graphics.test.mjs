@@ -64,6 +64,34 @@ test('uses the next counter when no asset suffix is provided', () => {
   assert.equal(existsSync(path.join(assetsDir, 'github-activity-light-v0007.svg')), false);
 });
 
+test('keeps existing asset paths when rendered graphics are unchanged', () => {
+  const outDir = mkdtempSync(path.join(tmpdir(), 'profile-graphics-'));
+
+  execFileSync(process.execPath, [
+    script,
+    '--fixture',
+    fixture,
+    '--out-dir',
+    outDir,
+    '--asset-suffix',
+    'stable'
+  ], { encoding: 'utf8' });
+
+  execFileSync(process.execPath, [
+    script,
+    '--fixture',
+    fixture,
+    '--out-dir',
+    outDir
+  ], { encoding: 'utf8' });
+
+  const readme = readFileSync(path.join(outDir, 'README.md'), 'utf8');
+  assert.match(readme, /github-activity-light-stable\.svg/);
+  assert.match(readme, /github-activity-dark-stable\.svg/);
+  assert.equal(existsSync(path.join(outDir, 'assets/github-activity-light-v0001.svg')), false);
+  assert.equal(existsSync(path.join(outDir, 'assets/github-activity-dark-v0001.svg')), false);
+});
+
 test('keeps visible private repository contributions private', () => {
   const outDir = mkdtempSync(path.join(tmpdir(), 'profile-graphics-'));
 
