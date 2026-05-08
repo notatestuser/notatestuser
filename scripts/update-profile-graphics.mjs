@@ -6,10 +6,12 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const USER_AGENT = 'profile-activity-graphics';
-const API_ROOT = 'https://api.github.com';
+const API_ROOT = process.env.GITHUB_API_ROOT || 'https://api.github.com';
 const GENERATED_ASSET_RE = /^github-activity-(light|dark)-.+\.svg$/;
 const COUNTER_ASSET_RE = /^github-activity-(?:light|dark)-v(\d+)\.svg$/;
 const REQUEST_TIMEOUT_MS = 30000;
+const SECONDARY_RATE_LIMIT_BASE_WAIT_MS = 60000;
+const RATE_LIMIT_RESET_BUFFER_MS = 5000;
 const REPOSITORY_CONTRIBUTION_GROUPS = [
   'commitContributionsByRepository',
   'issueContributionsByRepository',
@@ -468,7 +470,7 @@ function commitCacheKey({ repo, sha }) {
 }
 
 function isRateLimitError(error) {
-  return /rate limit|secondary rate|abuse detection/i.test(error.message || '');
+  return isRateLimitMessage(error.message);
 }
 
 async function listAuthoredCommits({ repo, login, token, since }) {
@@ -516,18 +518,21 @@ async function mapLimit(items, limit, mapper) {
 }
 
 async function graphql({ token, query, variables }) {
-  const response = await fetch(`${API_ROOT}/graphql`, {
-    method: 'POST',
-    headers: apiHeaders(token),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    body: JSON.stringify({ query, variables })
-  });
-  const payload = await response.json();
-  if (!response.ok || payload.errors) {
+  while (true) {
+    const response = await fetch(`${API_ROOT}/graphql`, {
+      method: 'POST',
+      headers: apiHeaders(token),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      body: JSON.stringify({ query, variables })
+    });
+    const payload = await response.json();
+    if (response.ok && !payload.errors) return payload.data;
+
     const detail = payload.errors?.map((error) => error.message).join('; ') || response.statusText;
-    throw new Error(`GitHub GraphQL request failed: ${detail}`);
+    const waitMs = rateLimitWaitMs({ response, message: detail });
+    if (waitMs === null) throw new Error(`GitHub GraphQL request failed: ${detail}`);
+    await waitForRateLimit({ label: 'GraphQL', response, message: detail, waitMs });
   }
-  return payload.data;
 }
 
 async function paginateRest({ token, pathName, params = {} }) {
@@ -545,20 +550,68 @@ async function paginateRest({ token, pathName, params = {} }) {
 async function restJson({ token, pathName, params = {} }) {
   const url = new URL(`${API_ROOT}${pathName}`);
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
-  const response = await fetch(url, {
-    headers: apiHeaders(token),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-  });
-  if (!response.ok) {
+  while (true) {
+    const response = await fetch(url, {
+      headers: apiHeaders(token),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+    });
+    if (response.ok) return response.json();
+
     let message = response.statusText;
     try {
       message = (await response.json()).message || message;
     } catch {
       // Keep the HTTP status text.
     }
-    throw new Error(`${pathName} failed (${response.status}): ${message}`);
+    const waitMs = rateLimitWaitMs({ response, message });
+    if (waitMs === null) throw new Error(`${pathName} failed (${response.status}): ${message}`);
+    await waitForRateLimit({ label: pathName, response, message, waitMs });
   }
-  return response.json();
+}
+
+function rateLimitWaitMs({ response, message }) {
+  if (![403, 429].includes(response.status) || !isRateLimitMessage(message)) return null;
+
+  const retryAfter = Number(response.headers.get('retry-after'));
+  if (Number.isFinite(retryAfter)) return Math.max(0, retryAfter * 1000);
+
+  const remaining = response.headers.get('x-ratelimit-remaining');
+  const reset = Number(response.headers.get('x-ratelimit-reset'));
+  if (remaining === '0' && Number.isFinite(reset)) {
+    return Math.max(0, reset * 1000 - Date.now() + RATE_LIMIT_RESET_BUFFER_MS);
+  }
+
+  return SECONDARY_RATE_LIMIT_BASE_WAIT_MS;
+}
+
+async function waitForRateLimit({ label, response, message, waitMs }) {
+  console.warn(`${label} rate limited: ${message}`);
+  console.warn(`Waiting ${formatDuration(waitMs)} before retrying. ${rateLimitDetails(response)}`);
+  await sleep(waitMs);
+}
+
+function rateLimitDetails(response) {
+  const retryAfter = response.headers.get('retry-after');
+  const remaining = response.headers.get('x-ratelimit-remaining');
+  const reset = Number(response.headers.get('x-ratelimit-reset'));
+  const resetAt = Number.isFinite(reset) ? new Date(reset * 1000).toISOString() : 'unknown';
+  return `retry-after=${retryAfter || 'none'} remaining=${remaining || 'unknown'} reset=${resetAt}`;
+}
+
+function isRateLimitMessage(message) {
+  return /rate limit|secondary rate|abuse detection/i.test(message || '');
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function formatDuration(ms) {
+  const seconds = Math.ceil(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return remainder > 0 ? `${minutes}m ${remainder}s` : `${minutes}m`;
 }
 
 function apiHeaders(token) {

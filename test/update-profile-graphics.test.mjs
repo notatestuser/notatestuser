@@ -1,4 +1,5 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import { createServer } from 'node:http';
 import { mkdirSync, mkdtempSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -136,3 +137,115 @@ test('renders language mix from changed source files', () => {
   assert.doesNotMatch(light, /Go<\/text>/);
   assert.doesNotMatch(light, /Markdown<\/text>|JSON<\/text>/);
 });
+
+test('waits and retries GitHub REST rate limits', async () => {
+  const outDir = mkdtempSync(path.join(tmpdir(), 'profile-graphics-'));
+  let privateRepoRequests = 0;
+  const server = createServer(async (request, response) => {
+    if (request.method === 'POST' && request.url === '/graphql') {
+      const body = await readRequestBody(request);
+      response.setHeader('content-type', 'application/json');
+      if (body.includes('contributionYears')) {
+        response.end(JSON.stringify({
+          data: { user: { contributionsCollection: { contributionYears: [2026] } } }
+        }));
+      } else {
+        response.end(JSON.stringify({
+          data: {
+            user: {
+              y2026: {
+                contributionCalendar: { totalContributions: 0 },
+                restrictedContributionsCount: 0,
+                commitContributionsByRepository: [],
+                issueContributionsByRepository: [],
+                pullRequestContributionsByRepository: [],
+                pullRequestReviewContributionsByRepository: [],
+                repositoryContributions: { nodes: [] }
+              }
+            }
+          }
+        }));
+      }
+      return;
+    }
+
+    if (request.method === 'GET' && request.url.startsWith('/user/repos')) {
+      privateRepoRequests += 1;
+      response.setHeader('content-type', 'application/json');
+      if (privateRepoRequests === 1) {
+        response.statusCode = 403;
+        response.setHeader('retry-after', '0');
+        response.setHeader('x-ratelimit-remaining', '0');
+        response.setHeader('x-ratelimit-reset', String(Math.floor(Date.now() / 1000)));
+        response.end(JSON.stringify({ message: 'API rate limit exceeded for test' }));
+      } else {
+        response.end(JSON.stringify([]));
+      }
+      return;
+    }
+
+    response.statusCode = 404;
+    response.end(JSON.stringify({ message: 'not found' }));
+  });
+
+  await listen(server);
+  try {
+    const { port } = server.address();
+    const result = await runProcess(process.execPath, [
+      script,
+      '--login',
+      'octocat',
+      '--out-dir',
+      outDir,
+      '--asset-suffix',
+      'retry'
+    ], {
+      env: {
+        ...process.env,
+        GH_TOKEN: 'test-token',
+        GITHUB_API_ROOT: `http://127.0.0.1:${port}`
+      }
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(privateRepoRequests, 2);
+    assert.match(result.stderr, /rate limited: API rate limit exceeded for test/);
+    assert.match(result.stderr, /retry-after=0 remaining=0 reset=/);
+    assert.equal(existsSync(path.join(outDir, 'assets/github-activity-light-retry.svg')), true);
+  } finally {
+    await close(server);
+  }
+});
+
+function listen(server) {
+  return new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+}
+
+function close(server) {
+  return new Promise((resolve, reject) => {
+    server.close((error) => error ? reject(error) : resolve());
+  });
+}
+
+function runProcess(command, args, options) {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, options);
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.on('close', (status) => resolve({ status, stdout, stderr }));
+  });
+}
+
+function readRequestBody(request) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    request.setEncoding('utf8');
+    request.on('data', (chunk) => { body += chunk; });
+    request.on('end', () => resolve(body));
+    request.on('error', reject);
+  });
+}
