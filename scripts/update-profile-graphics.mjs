@@ -4,6 +4,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const USER_AGENT = 'profile-activity-graphics';
 const API_ROOT = process.env.GITHUB_API_ROOT || 'https://api.github.com';
@@ -11,6 +12,7 @@ const GENERATED_ASSET_RE = /^github-activity-(light|dark)-.+\.svg$/;
 const COUNTER_ASSET_RE = /^github-activity-(?:light|dark)-v(\d+)\.svg$/;
 const REQUEST_TIMEOUT_MS = 30000;
 const SECONDARY_RATE_LIMIT_BASE_WAIT_MS = 60000;
+const SECONDARY_RATE_LIMIT_MAX_WAIT_MS = 15 * 60000;
 const RATE_LIMIT_RESET_BUFFER_MS = 5000;
 const REPOSITORY_CONTRIBUTION_GROUPS = [
   'commitContributionsByRepository',
@@ -178,10 +180,12 @@ const THEMES = {
   }
 };
 
-main().catch((error) => {
-  console.error(error.stack || error.message);
-  process.exit(1);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error.stack || error.message);
+    process.exit(1);
+  });
+}
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
@@ -518,6 +522,7 @@ async function mapLimit(items, limit, mapper) {
 }
 
 async function graphql({ token, query, variables }) {
+  let rateLimitAttempt = 0;
   while (true) {
     const response = await fetch(`${API_ROOT}/graphql`, {
       method: 'POST',
@@ -529,9 +534,10 @@ async function graphql({ token, query, variables }) {
     if (response.ok && !payload.errors) return payload.data;
 
     const detail = payload.errors?.map((error) => error.message).join('; ') || response.statusText;
-    const waitMs = rateLimitWaitMs({ response, message: detail });
+    const waitMs = rateLimitWaitMs({ response, message: detail, attempt: rateLimitAttempt });
     if (waitMs === null) throw new Error(`GitHub GraphQL request failed: ${detail}`);
-    await waitForRateLimit({ label: 'GraphQL', response, message: detail, waitMs });
+    rateLimitAttempt += 1;
+    await waitForRateLimit({ label: 'GraphQL', response, message: detail, waitMs, attempt: rateLimitAttempt });
   }
 }
 
@@ -550,6 +556,7 @@ async function paginateRest({ token, pathName, params = {} }) {
 async function restJson({ token, pathName, params = {} }) {
   const url = new URL(`${API_ROOT}${pathName}`);
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  let rateLimitAttempt = 0;
   while (true) {
     const response = await fetch(url, {
       headers: apiHeaders(token),
@@ -563,30 +570,45 @@ async function restJson({ token, pathName, params = {} }) {
     } catch {
       // Keep the HTTP status text.
     }
-    const waitMs = rateLimitWaitMs({ response, message });
+    const waitMs = rateLimitWaitMs({ response, message, attempt: rateLimitAttempt });
     if (waitMs === null) throw new Error(`${pathName} failed (${response.status}): ${message}`);
-    await waitForRateLimit({ label: pathName, response, message, waitMs });
+    rateLimitAttempt += 1;
+    await waitForRateLimit({ label: pathName, response, message, waitMs, attempt: rateLimitAttempt });
   }
 }
 
-function rateLimitWaitMs({ response, message }) {
+function rateLimitWaitMs({ response, message, attempt = 0 }) {
   if (![403, 429].includes(response.status) || !isRateLimitMessage(message)) return null;
 
-  const retryAfter = Number(response.headers.get('retry-after'));
-  if (Number.isFinite(retryAfter)) return Math.max(0, retryAfter * 1000);
+  const retryAfterHeader = response.headers.get('retry-after');
+  const retryAfter = Number(retryAfterHeader);
+  if (retryAfterHeader !== null && Number.isFinite(retryAfter) && retryAfter >= 0) {
+    return retryAfter * 1000;
+  }
 
   const remaining = response.headers.get('x-ratelimit-remaining');
   const reset = Number(response.headers.get('x-ratelimit-reset'));
   if (remaining === '0' && Number.isFinite(reset)) {
-    return Math.max(0, reset * 1000 - Date.now() + RATE_LIMIT_RESET_BUFFER_MS);
+    const resetDeltaMs = reset * 1000 - rateLimitNowMs(response);
+    if (resetDeltaMs > 0) return resetDeltaMs + RATE_LIMIT_RESET_BUFFER_MS;
   }
 
-  return SECONDARY_RATE_LIMIT_BASE_WAIT_MS;
+  return secondaryRateLimitWaitMs(attempt);
 }
 
-async function waitForRateLimit({ label, response, message, waitMs }) {
+function rateLimitNowMs(response) {
+  const responseDate = Date.parse(response.headers.get('date') || '');
+  return Number.isFinite(responseDate) ? responseDate : Date.now();
+}
+
+function secondaryRateLimitWaitMs(attempt) {
+  const multiplier = 2 ** Math.min(Math.max(0, attempt), 4);
+  return Math.min(SECONDARY_RATE_LIMIT_BASE_WAIT_MS * multiplier, SECONDARY_RATE_LIMIT_MAX_WAIT_MS);
+}
+
+async function waitForRateLimit({ label, response, message, waitMs, attempt }) {
   console.warn(`${label} rate limited: ${message}`);
-  console.warn(`Waiting ${formatDuration(waitMs)} before retrying. ${rateLimitDetails(response)}`);
+  console.warn(`Waiting ${formatDuration(waitMs)} before retrying (attempt ${attempt}). ${rateLimitDetails(response)}`);
   await sleep(waitMs);
 }
 
@@ -594,8 +616,9 @@ function rateLimitDetails(response) {
   const retryAfter = response.headers.get('retry-after');
   const remaining = response.headers.get('x-ratelimit-remaining');
   const reset = Number(response.headers.get('x-ratelimit-reset'));
+  const responseDate = new Date(rateLimitNowMs(response)).toISOString();
   const resetAt = Number.isFinite(reset) ? new Date(reset * 1000).toISOString() : 'unknown';
-  return `retry-after=${retryAfter || 'none'} remaining=${remaining || 'unknown'} reset=${resetAt}`;
+  return `retry-after=${retryAfter || 'none'} remaining=${remaining || 'unknown'} reset=${resetAt} response-date=${responseDate}`;
 }
 
 function isRateLimitMessage(message) {
@@ -613,6 +636,10 @@ function formatDuration(ms) {
   const remainder = seconds % 60;
   return remainder > 0 ? `${minutes}m ${remainder}s` : `${minutes}m`;
 }
+
+export {
+  rateLimitWaitMs
+};
 
 function apiHeaders(token) {
   return {

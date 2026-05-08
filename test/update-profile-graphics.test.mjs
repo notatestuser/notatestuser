@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { mkdirSync, mkdtempSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -11,6 +12,7 @@ const script = path.join(repoRoot, 'scripts/update-profile-graphics.mjs');
 const fixture = path.join(repoRoot, 'test/fixtures/profile-stats.json');
 const contributionFixture = path.join(repoRoot, 'test/fixtures/contribution-buckets.json');
 const changedFileFixture = path.join(repoRoot, 'test/fixtures/changed-file-language-stats.json');
+const { rateLimitWaitMs } = await import(pathToFileURL(script));
 
 test('renders slim profile graphics from a fixture', () => {
   const outDir = mkdtempSync(path.join(tmpdir(), 'profile-graphics-'));
@@ -215,6 +217,45 @@ test('waits and retries GitHub REST rate limits', async () => {
   } finally {
     await close(server);
   }
+});
+
+test('calculates primary rate-limit waits from GitHub response time', () => {
+  const response = new Response('{}', {
+    status: 403,
+    headers: {
+      date: 'Fri, 08 May 2026 21:11:04 GMT',
+      'x-ratelimit-remaining': '0',
+      'x-ratelimit-reset': String(Date.parse('2026-05-08T21:55:25Z') / 1000)
+    }
+  });
+
+  assert.equal(rateLimitWaitMs({
+    response,
+    message: 'API rate limit exceeded for test'
+  }), 2666000);
+});
+
+test('uses a real backoff when rate-limit reset is stale', () => {
+  const response = new Response('{}', {
+    status: 403,
+    headers: {
+      date: 'Fri, 08 May 2026 21:55:26 GMT',
+      'x-ratelimit-remaining': '0',
+      'x-ratelimit-reset': String(Date.parse('2026-05-08T21:55:25Z') / 1000)
+    }
+  });
+
+  assert.equal(rateLimitWaitMs({
+    response,
+    message: 'API rate limit exceeded for test',
+    attempt: 0
+  }), 60000);
+
+  assert.equal(rateLimitWaitMs({
+    response,
+    message: 'API rate limit exceeded for test',
+    attempt: 2
+  }), 240000);
 });
 
 function listen(server) {
