@@ -173,14 +173,15 @@ test('waits and retries GitHub REST rate limits', async () => {
 
     if (request.method === 'GET' && request.url.startsWith('/user/repos')) {
       privateRepoRequests += 1;
-      response.setHeader('content-type', 'application/json');
       if (privateRepoRequests === 1) {
         response.statusCode = 403;
+        response.setHeader('content-type', 'text/html');
         response.setHeader('retry-after', '0');
         response.setHeader('x-ratelimit-remaining', '0');
         response.setHeader('x-ratelimit-reset', String(Math.floor(Date.now() / 1000)));
-        response.end(JSON.stringify({ message: 'API rate limit exceeded for test' }));
+        response.end('<html><h1>API rate limit exceeded for test</h1></html>');
       } else {
+        response.setHeader('content-type', 'application/json');
         response.end(JSON.stringify([]));
       }
       return;
@@ -211,7 +212,7 @@ test('waits and retries GitHub REST rate limits', async () => {
 
     assert.equal(result.status, 0, result.stderr);
     assert.equal(privateRepoRequests, 2);
-    assert.match(result.stderr, /rate limited: API rate limit exceeded for test/);
+    assert.match(result.stderr, /rate limited: non-JSON response \(403 Forbidden\): <html>/);
     assert.match(result.stderr, /retry-after=0 remaining=0 reset=/);
     assert.equal(existsSync(path.join(outDir, 'assets/github-activity-light-retry.svg')), true);
   } finally {
@@ -233,6 +234,20 @@ test('calculates primary rate-limit waits from GitHub response time', () => {
     response,
     message: 'API rate limit exceeded for test'
   }), 2666000);
+});
+
+test('recognizes rate-limit headers when the response body is not JSON', () => {
+  const response = new Response('<html><h1>rate limited</h1></html>', {
+    status: 403,
+    headers: {
+      'retry-after': '12'
+    }
+  });
+
+  assert.equal(rateLimitWaitMs({
+    response,
+    message: 'non-JSON response (403 Forbidden): <html><h1>rate limited</h1></html>'
+  }), 12000);
 });
 
 test('uses a real backoff when rate-limit reset is stale', () => {
