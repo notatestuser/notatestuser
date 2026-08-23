@@ -1,6 +1,6 @@
 <div align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/github-activity-dark-v0023.svg">
-    <img src="assets/github-activity-light-v0023.svg" width="980" alt="GitHub activity breakdown showing public and private contributions plus changed-file language usage">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/github-activity-dark-v0024.svg">
+    <img src="assets/github-activity-light-v0024.svg" width="980" alt="GitHub activity breakdown showing public and private contributions plus changed-file language usage">
   </picture>
 </div>
