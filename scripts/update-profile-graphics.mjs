@@ -16,10 +16,15 @@ const SECONDARY_RATE_LIMIT_MAX_WAIT_MS = 15 * 60000;
 const TRANSIENT_ERROR_BASE_WAIT_MS = 10000;
 const TRANSIENT_ERROR_MAX_WAIT_MS = 120000;
 const RATE_LIMIT_RESET_BUFFER_MS = 5000;
-const COMMIT_LANGUAGE_CACHE_VERSION = 2;
+const COMMIT_LANGUAGE_CACHE_VERSION = 3;
 const DEFAULT_LANGUAGE_CACHE = '.cache/profile-activity-language-cache.json';
 
 const LANGUAGE_BY_EXTENSION = new Map([
+  ['.asm', 'Assembly'],
+  ['.s', 'Assembly'],
+  ['.astro', 'Astro'],
+  ['.bat', 'Batchfile'],
+  ['.cmd', 'Batchfile'],
   ['.c', 'C'],
   ['.cc', 'C++'],
   ['.cpp', 'C++'],
@@ -28,11 +33,25 @@ const LANGUAGE_BY_EXTENSION = new Map([
   ['.hpp', 'C++'],
   ['.hh', 'C++'],
   ['.cs', 'C#'],
+  ['.clj', 'Clojure'],
+  ['.cljc', 'Clojure'],
+  ['.cljs', 'Clojure'],
   ['.css', 'CSS'],
   ['.dart', 'Dart'],
   ['.ex', 'Elixir'],
   ['.exs', 'Elixir'],
+  ['.erl', 'Erlang'],
+  ['.hrl', 'Erlang'],
+  ['.fs', 'F#'],
+  ['.fsx', 'F#'],
   ['.go', 'Go'],
+  ['.graphql', 'GraphQL'],
+  ['.gql', 'GraphQL'],
+  ['.gradle', 'Groovy'],
+  ['.groovy', 'Groovy'],
+  ['.hs', 'Haskell'],
+  ['.tf', 'HCL'],
+  ['.tfvars', 'HCL'],
   ['.html', 'HTML'],
   ['.htm', 'HTML'],
   ['.java', 'Java'],
@@ -40,13 +59,21 @@ const LANGUAGE_BY_EXTENSION = new Map([
   ['.jsx', 'JavaScript'],
   ['.mjs', 'JavaScript'],
   ['.cjs', 'JavaScript'],
+  ['.ipynb', 'Jupyter Notebook'],
   ['.kt', 'Kotlin'],
   ['.kts', 'Kotlin'],
+  ['.lua', 'Lua'],
+  ['.nix', 'Nix'],
   ['.m', 'Objective-C'],
   ['.mm', 'Objective-C++'],
+  ['.pl', 'Perl'],
+  ['.pm', 'Perl'],
   ['.php', 'PHP'],
+  ['.ps1', 'PowerShell'],
+  ['.proto', 'Protocol Buffer'],
   ['.py', 'Python'],
   ['.pyi', 'Python'],
+  ['.r', 'R'],
   ['.rb', 'Ruby'],
   ['.rs', 'Rust'],
   ['.sass', 'CSS'],
@@ -57,13 +84,16 @@ const LANGUAGE_BY_EXTENSION = new Map([
   ['.fish', 'Shell'],
   ['.zsh', 'Shell'],
   ['.sol', 'Solidity'],
+  ['.sql', 'SQL'],
   ['.svelte', 'Svelte'],
   ['.swift', 'Swift'],
+  ['.tex', 'TeX'],
   ['.ts', 'TypeScript'],
   ['.tsx', 'TypeScript'],
   ['.mts', 'TypeScript'],
   ['.cts', 'TypeScript'],
-  ['.vue', 'Vue']
+  ['.vue', 'Vue'],
+  ['.zig', 'Zig']
 ]);
 
 const LANGUAGE_BY_BASENAME = new Map([
@@ -102,6 +132,7 @@ const IGNORED_EXTENSIONS = new Set([
   '.map',
   '.md',
   '.markdown',
+  '.mdx',
   '.pdf',
   '.png',
   '.snap',
@@ -120,6 +151,26 @@ const IGNORED_EXTENSIONS = new Set([
 ]);
 
 const LANGUAGE_COLORS = {
+  Assembly: '#6e4c13',
+  Astro: '#ff5d01',
+  Batchfile: '#c1f12e',
+  Clojure: '#db5855',
+  Erlang: '#b83998',
+  'F#': '#b845fc',
+  GraphQL: '#e10098',
+  Groovy: '#4298b8',
+  Haskell: '#5e5086',
+  HCL: '#844fba',
+  'Jupyter Notebook': '#da5b0b',
+  Lua: '#000080',
+  Nix: '#7e7eff',
+  Perl: '#0298c3',
+  PowerShell: '#012456',
+  'Protocol Buffer': '#4285f4',
+  R: '#198ce7',
+  SQL: '#e38c00',
+  TeX: '#3d6117',
+  Zig: '#ec915c',
   JavaScript: '#f1e05a',
   TypeScript: '#3178c6',
   Rust: '#dea584',
@@ -419,26 +470,29 @@ async function fetchCommitLanguageTotals({ repos, login, token, cachePath, since
   let cacheMisses = 0;
   let savedMisses = 0;
   const commitLanguageEntries = [];
+  const diagnostics = {
+    mergeCommits: 0,
+    mergeChanges: 0,
+    unmappedChanges: 0,
+    unmappedExtensions: new Map()
+  };
 
   for (let i = 0; i < commits.length; i += 100) {
     const batch = commits.slice(i, i + 100);
     const batchLanguageEntries = await mapLimit(batch, 4, async ({ repo, sha }) => {
       const key = commitCacheKey({ repo, sha });
-      if (cache.commits[key]) return cache.commits[key];
+      const cached = cache.commits[key];
+      if (cached) {
+        recordCommitDiagnostics(diagnostics, cached);
+        return cached;
+      }
 
       try {
         const commit = await restJson({ token, pathName: `/repos/${repo}/commits/${sha}` });
-        const files = (commit.files || []).map((file) => ({
-            filename: file.filename,
-            additions: Number(file.additions || 0),
-            deletions: Number(file.deletions || 0),
-            changes: Number(file.changes || 0)
-          }));
-        const entry = {
-          languages: languageTotalsFromCommitFileChanges([{ files }])
-        };
+        const entry = commitLanguageEntry(commit);
         cache.commits[key] = entry;
         cacheMisses += 1;
+        recordCommitDiagnostics(diagnostics, entry);
         return entry;
       } catch (error) {
         if (isRateLimitError(error)) throw error;
@@ -454,7 +508,91 @@ async function fetchCommitLanguageTotals({ repos, login, token, cachePath, since
     console.log(`Inspected ${Math.min(i + batch.length, commits.length)}/${commits.length} commits (${cacheMisses} fetched).`);
   }
 
-  return languageTotalsFromCommitLanguageEntries(commitLanguageEntries);
+  const languageBytes = languageTotalsFromCommitLanguageEntries(commitLanguageEntries);
+  logLanguageDiagnostics(diagnostics, languageBytes);
+  return languageBytes;
+}
+
+function commitLanguageEntry(commit) {
+  if ((commit.parents || []).length > 1) {
+    return {
+      merge: true,
+      mergeChanges: (commit.files || []).reduce(
+        (sum, file) => sum + Number(file.additions || 0) + Number(file.deletions || 0),
+        0
+      ),
+      languages: []
+    };
+  }
+
+  const unmappedExtensions = new Map();
+  let unmappedChanges = 0;
+  const files = (commit.files || []).map((file) => {
+    const classified = classifyLanguagePath(file.filename);
+    if (classified.kind === 'unmapped') {
+      unmappedChanges += Number(file.additions || 0) + Number(file.deletions || 0);
+      unmappedExtensions.set(classified.extension, (unmappedExtensions.get(classified.extension) || 0) + 1);
+    }
+    return {
+      filename: file.filename,
+      additions: Number(file.additions || 0),
+      deletions: Number(file.deletions || 0),
+      changes: Number(file.changes || 0)
+    };
+  });
+
+  const entry = {
+    languages: languageTotalsFromCommitFileChanges([{ files }])
+  };
+  if (unmappedChanges > 0) {
+    entry.unmapped = {
+      changes: unmappedChanges,
+      extensions: Object.fromEntries(unmappedExtensions)
+    };
+  }
+  return entry;
+}
+
+function recordCommitDiagnostics(diagnostics, entry) {
+  if (entry.merge) {
+    diagnostics.mergeCommits += 1;
+    diagnostics.mergeChanges += Number(entry.mergeChanges || 0);
+  }
+  if (entry.unmapped) {
+    diagnostics.unmappedChanges += Number(entry.unmapped.changes || 0);
+    for (const [extension, count] of Object.entries(entry.unmapped.extensions || {})) {
+      diagnostics.unmappedExtensions.set(
+        extension,
+        (diagnostics.unmappedExtensions.get(extension) || 0) + Number(count || 0)
+      );
+    }
+  }
+}
+
+function logLanguageDiagnostics(diagnostics, languageBytes) {
+  const countedChanges = languageBytes.reduce((sum, language) => sum + language.bytes, 0);
+  if (diagnostics.mergeCommits > 0) {
+    const inspected = countedChanges + diagnostics.mergeChanges;
+    const share = inspected > 0 ? ((diagnostics.mergeChanges / inspected) * 100).toFixed(1) : '0.0';
+    const commitLabel = diagnostics.mergeCommits === 1 ? 'commit' : 'commits';
+    console.log(
+      `Skipped ${diagnostics.mergeCommits} merge ${commitLabel} carrying ${diagnostics.mergeChanges} changed lines ` +
+      `(${share}% of ${inspected} inspected) to avoid double counting.`
+    );
+  }
+  if (diagnostics.unmappedChanges > 0) {
+    const inspected = countedChanges + diagnostics.unmappedChanges;
+    const share = inspected > 0 ? ((diagnostics.unmappedChanges / inspected) * 100).toFixed(1) : '0.0';
+    const top = [...diagnostics.unmappedExtensions.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([extension, count]) => `${extension} (${count})`)
+      .join(', ');
+    console.log(
+      `Excluded ${diagnostics.unmappedChanges} changed lines from unmapped extensions ` +
+      `(${share}% of ${inspected} inspected); top: ${top}.`
+    );
+  }
 }
 
 function commitCacheKey({ repo, sha }) {
@@ -749,15 +887,24 @@ function languageTotalsFromCommitLanguageEntries(entries) {
     .sort((a, b) => b.bytes - a.bytes);
 }
 
-function languageForPath(filename) {
+function classifyLanguagePath(filename) {
   const normalized = String(filename || '').replaceAll('\\', '/');
   const basename = normalized.split('/').pop()?.toLowerCase();
-  if (!basename || IGNORED_BASENAMES.has(basename)) return null;
-  if (LANGUAGE_BY_BASENAME.has(basename)) return LANGUAGE_BY_BASENAME.get(basename);
+  if (!basename || IGNORED_BASENAMES.has(basename)) return { kind: 'ignored' };
+  if (LANGUAGE_BY_BASENAME.has(basename)) {
+    return { kind: 'language', language: LANGUAGE_BY_BASENAME.get(basename) };
+  }
 
   const extension = languageExtension(basename);
-  if (!extension || IGNORED_EXTENSIONS.has(extension)) return null;
-  return LANGUAGE_BY_EXTENSION.get(extension) || null;
+  if (!extension || IGNORED_EXTENSIONS.has(extension)) return { kind: 'ignored' };
+  const language = LANGUAGE_BY_EXTENSION.get(extension);
+  if (!language) return { kind: 'unmapped', extension };
+  return { kind: 'language', language };
+}
+
+function languageForPath(filename) {
+  const classified = classifyLanguagePath(filename);
+  return classified.kind === 'language' ? classified.language : null;
 }
 
 function languageExtension(basename) {
