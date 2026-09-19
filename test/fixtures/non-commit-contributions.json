@@ -1,0 +1,40 @@
+{
+  "user": "octocat",
+  "generatedAt": "2026-05-05T00:00:00.000Z",
+  "years": [2026],
+  "contributionBuckets": {
+    "y2026": {
+      "restrictedContributionsCount": 0,
+      "commitContributionsByRepository": [],
+      "issueContributionsByRepository": [
+        {
+          "repository": { "nameWithOwner": "octocat/public-repo", "isPrivate": false },
+          "contributions": { "totalCount": 1 }
+        }
+      ],
+      "pullRequestContributionsByRepository": [
+        {
+          "repository": { "nameWithOwner": "octocat/private-repo", "isPrivate": true },
+          "contributions": { "totalCount": 2 }
+        }
+      ],
+      "pullRequestReviewContributionsByRepository": [
+        {
+          "repository": { "nameWithOwner": "octocat/private-repo", "isPrivate": true },
+          "contributions": { "totalCount": 1 }
+        }
+      ],
+      "repositoryContributions": {
+        "nodes": [
+          { "repository": { "nameWithOwner": "octocat/forked-repo", "isPrivate": false } }
+        ]
+      }
+    }
+  },
+  "commitRepos": {
+    "publicVisible": 0,
+    "privateReadable": 0,
+    "totalReadable": 0
+  },
+  "languageBytes": []
+}

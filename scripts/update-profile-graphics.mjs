@@ -16,12 +16,6 @@ const SECONDARY_RATE_LIMIT_MAX_WAIT_MS = 15 * 60000;
 const TRANSIENT_ERROR_BASE_WAIT_MS = 10000;
 const TRANSIENT_ERROR_MAX_WAIT_MS = 120000;
 const RATE_LIMIT_RESET_BUFFER_MS = 5000;
-const REPOSITORY_CONTRIBUTION_GROUPS = [
-  'commitContributionsByRepository',
-  'issueContributionsByRepository',
-  'pullRequestContributionsByRepository',
-  'pullRequestReviewContributionsByRepository'
-];
 const COMMIT_LANGUAGE_CACHE_VERSION = 2;
 const DEFAULT_LANGUAGE_CACHE = '.cache/profile-activity-language-cache.json';
 
@@ -287,23 +281,28 @@ async function fetchProfileStats({ login, token, languageCachePath }) {
   const contributionData = await fetchContributionBuckets({ login, years, token });
 
   const totals = contributionVisibilityTotals({ contributionData, years });
+  console.log(
+    `Commit contributions: ${totals.publicVisible} public, ${totals.privateCommitContributions} private; ` +
+    `restricted contributions counted as private (all types): ${totals.restrictedContributions}.`
+  );
+  const since = `${Math.min(...years)}-01-01T00:00:00Z`;
   const publicCommitRepos = new Set();
 
   for (const year of years) {
     const bucket = contributionData[`y${year}`];
-    for (const item of bucket.commitContributionsByRepository) {
+    for (const item of bucket.commitContributionsByRepository || []) {
       if (!item.repository.isPrivate) publicCommitRepos.add(item.repository.nameWithOwner);
     }
   }
 
-  const privateCommitRepos = await fetchPrivateCommitRepos({ login, token });
+  const privateCommitRepos = await fetchPrivateCommitRepos({ login, token, since });
   const allCommitRepos = [...new Set([...publicCommitRepos, ...privateCommitRepos])];
   const languageBytes = await fetchCommitLanguageTotals({
     repos: allCommitRepos,
     login,
     token,
     cachePath: languageCachePath,
-    since: `${Math.min(...years)}-01-01T00:00:00Z`
+    since
   });
 
   return normalizeStats({
@@ -347,26 +346,10 @@ async function fetchContributionBuckets({ login, years, token }) {
     const from = `${year}-01-01T00:00:00Z`;
     const to = year === currentYear ? now : `${year + 1}-01-01T00:00:00Z`;
     return `y${year}: contributionsCollection(from: "${from}", to: "${to}") {
-      contributionCalendar { totalContributions }
       restrictedContributionsCount
       commitContributionsByRepository(maxRepositories: 100) {
         repository { nameWithOwner isPrivate }
         contributions(first: 1) { totalCount }
-      }
-      issueContributionsByRepository(maxRepositories: 100) {
-        repository { nameWithOwner isPrivate }
-        contributions(first: 1) { totalCount }
-      }
-      pullRequestContributionsByRepository(maxRepositories: 100) {
-        repository { nameWithOwner isPrivate }
-        contributions(first: 1) { totalCount }
-      }
-      pullRequestReviewContributionsByRepository(maxRepositories: 100) {
-        repository { nameWithOwner isPrivate }
-        contributions(first: 1) { totalCount }
-      }
-      repositoryContributions(first: 100) {
-        nodes { repository { nameWithOwner isPrivate } }
       }
     }`;
   }).join('\n');
@@ -384,7 +367,7 @@ async function fetchContributionBuckets({ login, years, token }) {
   return data.user;
 }
 
-async function fetchPrivateCommitRepos({ login, token }) {
+async function fetchPrivateCommitRepos({ login, token, since }) {
   let privateRepos = [];
   try {
     privateRepos = await paginateRest({
@@ -402,12 +385,15 @@ async function fetchPrivateCommitRepos({ login, token }) {
     return [];
   }
 
-  const repos = await mapLimit(privateRepos, 4, async (repo) => {
+  const commitRepos = privateRepos.filter((repo) => !repo.fork);
+  const repos = await mapLimit(commitRepos, 4, async (repo) => {
     try {
+      const params = { author: login, per_page: '1' };
+      if (since) params.since = since;
       const commits = await restJson({
         token,
         pathName: `/repos/${repo.full_name}/commits`,
-        params: { author: login, per_page: '1' }
+        params
       });
       return Array.isArray(commits) && commits.length > 0 ? repo.full_name : null;
     } catch (error) {
@@ -783,7 +769,9 @@ function contributionVisibilityTotals({ contributionData, years }) {
   const totals = {
     total: 0,
     publicVisible: 0,
-    privateTotal: 0
+    privateTotal: 0,
+    privateCommitContributions: 0,
+    restrictedContributions: 0
   };
 
   for (const year of years) {
@@ -793,6 +781,8 @@ function contributionVisibilityTotals({ contributionData, years }) {
     const yearTotals = contributionBucketVisibilityTotals(bucket);
     totals.publicVisible += yearTotals.publicVisible;
     totals.privateTotal += yearTotals.privateTotal;
+    totals.privateCommitContributions += yearTotals.privateCommitContributions;
+    totals.restrictedContributions += yearTotals.restrictedContributions;
   }
 
   totals.total = totals.publicVisible + totals.privateTotal;
@@ -800,30 +790,27 @@ function contributionVisibilityTotals({ contributionData, years }) {
 }
 
 function contributionBucketVisibilityTotals(bucket) {
+  const restrictedContributions = Number(bucket.restrictedContributionsCount || 0);
   const totals = {
     publicVisible: 0,
-    privateTotal: Number(bucket.restrictedContributionsCount || 0)
+    privateTotal: restrictedContributions,
+    privateCommitContributions: 0,
+    restrictedContributions
   };
 
-  for (const group of REPOSITORY_CONTRIBUTION_GROUPS) {
-    for (const item of bucket[group] || []) {
-      addRepositoryContribution(totals, item.repository, item.contributions?.totalCount);
+  for (const item of bucket.commitContributionsByRepository || []) {
+    const value = Number(item.contributions?.totalCount || 0);
+    if (value <= 0 || !item.repository) continue;
+
+    if (item.repository.isPrivate) {
+      totals.privateTotal += value;
+      totals.privateCommitContributions += value;
+    } else {
+      totals.publicVisible += value;
     }
   }
 
-  for (const item of bucket.repositoryContributions?.nodes || []) {
-    addRepositoryContribution(totals, item.repository, 1);
-  }
-
   return totals;
-}
-
-function addRepositoryContribution(totals, repository, count) {
-  const value = Number(count || 0);
-  if (value <= 0 || !repository) return;
-
-  if (repository.isPrivate) totals.privateTotal += value;
-  else totals.publicVisible += value;
 }
 
 function normalizeTotals(totals = {}) {
@@ -925,7 +912,7 @@ function renderReadme({ lightAsset, darkAsset }) {
   return `<div align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/${darkAsset}">
-    <img src="assets/${lightAsset}" width="980" alt="GitHub activity breakdown showing public and private contributions plus changed-file language usage">
+    <img src="assets/${lightAsset}" width="980" alt="GitHub activity breakdown showing public and private commits plus changed-file language usage">
   </picture>
 </div>
 `;
@@ -956,7 +943,7 @@ function renderSvg({ stats, themeName }) {
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="980" height="225" viewBox="0 0 980 225" role="img" aria-labelledby="title desc">
   <title id="title">GitHub activity breakdown for ${escapeXml(stats.user)}</title>
-  <desc id="desc">Two pie charts showing public versus private contributions and changed-file language breakdown.</desc>
+  <desc id="desc">Two pie charts showing public versus private commits and changed-file language breakdown.</desc>
   <defs>
     <style>
       text { font-family: -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif; }
@@ -977,7 +964,7 @@ function renderSvg({ stats, themeName }) {
     ${pie(162, 211, 72, contribItems)}
     <circle cx="162" cy="211" r="42" fill="${theme.card}" stroke="${theme.stroke}"/>
     <text x="162" y="207" text-anchor="middle" class="centerBig" fill="${theme.text}">${compact(totalContributions)}</text>
-    <text x="162" y="226" text-anchor="middle" class="centerSmall" fill="${theme.muted}">contribs</text>
+    <text x="162" y="226" text-anchor="middle" class="centerSmall" fill="${theme.muted}">commits</text>
   </g>
   ${legendTwoLine({
     x: 276,

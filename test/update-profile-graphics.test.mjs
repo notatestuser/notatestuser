@@ -95,7 +95,7 @@ test('keeps existing asset paths when rendered graphics are unchanged', () => {
   assert.equal(existsSync(path.join(outDir, 'assets/github-activity-dark-v0001.svg')), false);
 });
 
-test('keeps visible private repository contributions private', () => {
+test('splits commit contributions by visibility and ignores other activity', () => {
   const outDir = mkdtempSync(path.join(tmpdir(), 'profile-graphics-'));
 
   execFileSync(process.execPath, [
@@ -110,12 +110,34 @@ test('keeps visible private repository contributions private', () => {
 
   const light = readFileSync(path.join(outDir, 'assets/github-activity-light-visibility.svg'), 'utf8');
   assert.match(light, /Private/);
-  assert.match(light, /12 \/ 70\.6%/);
+  assert.match(light, /9 \/ 75\.0%/);
   assert.match(light, /Public/);
-  assert.match(light, /5 \/ 29\.4%/);
+  assert.match(light, /3 \/ 25\.0%/);
+  assert.match(light, /centerBig[^>]*>12<\/text>/);
   assert.match(light, /<path d="M 162 211 L [^"]+ A 72 72 0 1 1 [^"]+" fill="#7c3aed"\/>/);
-  assert.doesNotMatch(light, /Private<\/text>\s*<text[^>]*>5 \/ 29\.4%<\/text>/);
-  assert.doesNotMatch(light, /Public<\/text>\s*<text[^>]*>12 \/ 70\.6%<\/text>/);
+  assert.doesNotMatch(light, /Private<\/text>\s*<text[^>]*>3 \/ 25\.0%<\/text>/);
+  assert.doesNotMatch(light, /Public<\/text>\s*<text[^>]*>9 \/ 75\.0%<\/text>/);
+});
+
+test('does not count created or forked repositories as commits', () => {
+  const outDir = mkdtempSync(path.join(tmpdir(), 'profile-graphics-'));
+  const nonCommitFixture = path.join(repoRoot, 'test/fixtures/non-commit-contributions.json');
+
+  execFileSync(process.execPath, [
+    script,
+    '--fixture',
+    nonCommitFixture,
+    '--out-dir',
+    outDir,
+    '--asset-suffix',
+    'non-commit'
+  ], { encoding: 'utf8' });
+
+  const light = readFileSync(path.join(outDir, 'assets/github-activity-light-non-commit.svg'), 'utf8');
+  assert.match(light, /centerBig[^>]*>0<\/text>/);
+  assert.match(light, /Private<\/text>\s*<text[^>]*>0 \/ 0\.0%<\/text>/);
+  assert.match(light, /Public<\/text>\s*<text[^>]*>0 \/ 0\.0%<\/text>/);
+  assert.doesNotMatch(light, /<path d="M 162 211 /);
 });
 
 test('renders language mix from changed source files', () => {
@@ -140,6 +162,97 @@ test('renders language mix from changed source files', () => {
   assert.doesNotMatch(light, /Markdown<\/text>|JSON<\/text>/);
 });
 
+test('excludes forked private repositories from commit languages', async () => {
+  const outDir = mkdtempSync(path.join(tmpdir(), 'profile-graphics-'));
+  let forkedRepoRequests = 0;
+  const server = createServer(async (request, response) => {
+    const url = new URL(request.url, 'http://127.0.0.1');
+    if (request.method === 'POST' && url.pathname === '/graphql') {
+      const body = await readRequestBody(request);
+      response.setHeader('content-type', 'application/json');
+      if (body.includes('contributionYears')) {
+        response.end(JSON.stringify({
+          data: { user: { contributionsCollection: { contributionYears: [2026] } } }
+        }));
+      } else {
+        response.end(JSON.stringify({
+          data: {
+            user: {
+              y2026: {
+                restrictedContributionsCount: 0,
+                commitContributionsByRepository: []
+              }
+            }
+          }
+        }));
+      }
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname === '/user/repos') {
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify([
+        { full_name: 'octocat/forked-repo', fork: true },
+        { full_name: 'octocat/private-repo', fork: false }
+      ]));
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname === '/repos/octocat/forked-repo/commits') {
+      forkedRepoRequests += 1;
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify([{ sha: 'forked-sha' }]));
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname === '/repos/octocat/private-repo/commits') {
+      const page = url.searchParams.get('page') || '1';
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify(page === '1' ? [{ sha: 'private-sha' }] : []));
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname === '/repos/octocat/private-repo/commits/private-sha') {
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({
+        files: [{ filename: 'src/main.rs', additions: 5, deletions: 5, changes: 10 }]
+      }));
+      return;
+    }
+
+    response.statusCode = 404;
+    response.end(JSON.stringify({ message: 'not found' }));
+  });
+
+  await listen(server);
+  try {
+    const { port } = server.address();
+    const result = await runProcess(process.execPath, [
+      script,
+      '--login',
+      'octocat',
+      '--out-dir',
+      outDir,
+      '--asset-suffix',
+      'forks'
+    ], {
+      env: {
+        ...process.env,
+        GH_TOKEN: 'test-token',
+        GITHUB_API_ROOT: `http://127.0.0.1:${port}`
+      }
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(forkedRepoRequests, 0);
+    assert.match(result.stdout, /Collecting changed-file languages from 1 readable commit repositories\./);
+    const light = readFileSync(path.join(outDir, 'assets/github-activity-light-forks.svg'), 'utf8');
+    assert.match(light, /Rust<\/text>\s*<text[^>]*>100\.0%<\/text>/);
+  } finally {
+    await close(server);
+  }
+});
+
 test('waits and retries GitHub REST rate limits', async () => {
   const outDir = mkdtempSync(path.join(tmpdir(), 'profile-graphics-'));
   let privateRepoRequests = 0;
@@ -156,13 +269,8 @@ test('waits and retries GitHub REST rate limits', async () => {
           data: {
             user: {
               y2026: {
-                contributionCalendar: { totalContributions: 0 },
                 restrictedContributionsCount: 0,
-                commitContributionsByRepository: [],
-                issueContributionsByRepository: [],
-                pullRequestContributionsByRepository: [],
-                pullRequestReviewContributionsByRepository: [],
-                repositoryContributions: { nodes: [] }
+                commitContributionsByRepository: []
               }
             }
           }

@@ -33,11 +33,20 @@ jobs:
       - name: Test generator
         run: npm test
 
+      - name: Require profile stats token
+        env:
+          PROFILE_STATS_TOKEN: ${{ secrets.PROFILE_STATS_TOKEN }}
+        run: |
+          if [ -z "$PROFILE_STATS_TOKEN" ]; then
+            echo "::error::PROFILE_STATS_TOKEN is required; without it private and restricted contributions would be missing from the activity figures."
+            exit 1
+          fi
+
       - name: Update and push graphics
         run: node scripts/update-profile-graphics.mjs --commit --push
         env:
           GITHUB_LOGIN: ${{ github.repository_owner }}
-          GH_TOKEN: ${{ secrets.PROFILE_STATS_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PROFILE_STATS_TOKEN }}
 
       - name: Save language cache
         if: always() && hashFiles('.cache/profile-activity-language-cache.json') != ''
