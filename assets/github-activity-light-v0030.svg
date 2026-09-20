@@ -18,34 +18,34 @@
   <g transform="translate(0 -76)">
   <text x="62" y="119" class="section" fill="#24292f">Public / private</text>
   <g>
-    <path d="M 162 211 L 162.000 139.000 A 72 72 0 0 1 233.905 207.293 Z" fill="#2fb8a6"/>
-    <path d="M 162 211 L 233.905 207.293 A 72 72 0 1 1 162.000 139.000 Z" fill="#7c3aed"/>
+    <path d="M 162 211 L 162.000 139.000 A 72 72 0 0 1 233.875 206.753 Z" fill="#2fb8a6"/>
+    <path d="M 162 211 L 233.875 206.753 A 72 72 0 1 1 162.000 139.000 Z" fill="#7c3aed"/>
     <circle cx="162" cy="211" r="42" fill="#ffffff" stroke="#d0d7de"/>
-    <text x="162" y="207" text-anchor="middle" class="centerBig" fill="#24292f">15.5k</text>
+    <text x="162" y="207" text-anchor="middle" class="centerBig" fill="#24292f">15.6k</text>
     <text x="162" y="226" text-anchor="middle" class="centerSmall" fill="#57606a">commits</text>
   </g>
   
     <g transform="translate(276 170)">
       <rect x="0" y="-10" width="10" height="10" rx="2" fill="#7c3aed"/>
       <text x="18" y="-8" class="body" fill="#24292f">Private</text>
-      <text x="18" y="10" class="muted" fill="#57606a">11,746 / 75.8%</text>
+      <text x="18" y="10" class="muted" fill="#57606a">11,823 / 75.9%</text>
     </g>
   
     <g transform="translate(276 222)">
       <rect x="0" y="-10" width="10" height="10" rx="2" fill="#2fb8a6"/>
       <text x="18" y="-8" class="body" fill="#24292f">Public</text>
-      <text x="18" y="10" class="muted" fill="#57606a">3,746 / 24.2%</text>
+      <text x="18" y="10" class="muted" fill="#57606a">3,746 / 24.1%</text>
     </g>
   <text x="536" y="119" class="section" fill="#24292f">Language mix</text>
   <g>
-    <path d="M 632 211 L 632.000 139.000 A 72 72 0 0 1 639.256 282.633 Z" fill="#636c76"/>
-    <path d="M 632 211 L 639.256 282.633 A 72 72 0 0 1 585.631 266.081 Z" fill="#00add8"/>
-    <path d="M 632 211 L 585.631 266.081 A 72 72 0 0 1 561.551 225.864 Z" fill="#f1e05a"/>
-    <path d="M 632 211 L 561.551 225.864 A 72 72 0 0 1 566.159 181.863 Z" fill="#f05138"/>
-    <path d="M 632 211 L 566.159 181.863 A 72 72 0 0 1 588.533 153.601 Z" fill="#3572a5"/>
-    <path d="M 632 211 L 588.533 153.601 A 72 72 0 0 1 606.875 143.526 Z" fill="#e34c26"/>
-    <path d="M 632 211 L 606.875 143.526 A 72 72 0 0 1 617.609 140.453 Z" fill="#563d7c"/>
-    <path d="M 632 211 L 617.609 140.453 A 72 72 0 0 1 632.000 139.000 Z" fill="#8b5cf6"/>
+    <path d="M 632 211 L 632.000 139.000 A 72 72 0 0 1 640.613 282.483 Z" fill="#636c76"/>
+    <path d="M 632 211 L 640.613 282.483 A 72 72 0 0 1 584.850 265.414 Z" fill="#00add8"/>
+    <path d="M 632 211 L 584.850 265.414 A 72 72 0 0 1 561.404 225.150 Z" fill="#f1e05a"/>
+    <path d="M 632 211 L 561.404 225.150 A 72 72 0 0 1 566.342 181.454 Z" fill="#f05138"/>
+    <path d="M 632 211 L 566.342 181.454 A 72 72 0 0 1 588.709 153.468 Z" fill="#3572a5"/>
+    <path d="M 632 211 L 588.709 153.468 A 72 72 0 0 1 606.960 143.495 Z" fill="#e34c26"/>
+    <path d="M 632 211 L 606.960 143.495 A 72 72 0 0 1 617.629 140.449 Z" fill="#563d7c"/>
+    <path d="M 632 211 L 617.629 140.449 A 72 72 0 0 1 632.000 139.000 Z" fill="#8b5cf6"/>
     <circle cx="632" cy="211" r="42" fill="#ffffff" stroke="#d0d7de"/>
     <text x="632" y="207" text-anchor="middle" class="centerBig" fill="#24292f">26</text>
     <text x="632" y="226" text-anchor="middle" class="centerSmall" fill="#57606a">languages</text>
@@ -54,17 +54,17 @@
     <g transform="translate(780 140)">
       <rect x="0" y="-8" width="9" height="9" rx="2" fill="#636c76"/>
       <text x="17" y="0" class="body" fill="#24292f">C</text>
-      <text x="132" y="0" text-anchor="end" class="muted" fill="#57606a">48.4%</text>
+      <text x="132" y="0" text-anchor="end" class="muted" fill="#57606a">48.1%</text>
     </g>
     <g transform="translate(780 160)">
       <rect x="0" y="-8" width="9" height="9" rx="2" fill="#00add8"/>
       <text x="17" y="0" class="body" fill="#24292f">Go</text>
-      <text x="132" y="0" text-anchor="end" class="muted" fill="#57606a">12.7%</text>
+      <text x="132" y="0" text-anchor="end" class="muted" fill="#57606a">13.3%</text>
     </g>
     <g transform="translate(780 180)">
       <rect x="0" y="-8" width="9" height="9" rx="2" fill="#f1e05a"/>
       <text x="17" y="0" class="body" fill="#24292f">JavaScript</text>
-      <text x="132" y="0" text-anchor="end" class="muted" fill="#57606a">10.6%</text>
+      <text x="132" y="0" text-anchor="end" class="muted" fill="#57606a">10.5%</text>
     </g>
     <g transform="translate(780 200)">
       <rect x="0" y="-8" width="9" height="9" rx="2" fill="#f05138"/>
@@ -74,7 +74,7 @@
     <g transform="translate(780 220)">
       <rect x="0" y="-8" width="9" height="9" rx="2" fill="#3572a5"/>
       <text x="17" y="0" class="body" fill="#24292f">Python</text>
-      <text x="132" y="0" text-anchor="end" class="muted" fill="#57606a">8.1%</text>
+      <text x="132" y="0" text-anchor="end" class="muted" fill="#57606a">8.0%</text>
     </g>
     <g transform="translate(780 240)">
       <rect x="0" y="-8" width="9" height="9" rx="2" fill="#e34c26"/>
