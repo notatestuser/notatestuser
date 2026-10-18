@@ -18,8 +18,8 @@
   <g transform="translate(0 -76)">
   <text x="62" y="119" class="section" fill="#f0f6fc">Public / private</text>
   <g>
-    <path d="M 162 211 L 162.000 139.000 A 72 72 0 0 1 233.732 204.788 Z" fill="#2fb8a6"/>
-    <path d="M 162 211 L 233.732 204.788 A 72 72 0 1 1 162.000 139.000 Z" fill="#7c3aed"/>
+    <path d="M 162 211 L 162.000 139.000 A 72 72 0 0 1 233.691 204.340 Z" fill="#2fb8a6"/>
+    <path d="M 162 211 L 233.691 204.340 A 72 72 0 1 1 162.000 139.000 Z" fill="#7c3aed"/>
     <circle cx="162" cy="211" r="42" fill="#111821" stroke="#30363d"/>
     <text x="162" y="207" text-anchor="middle" class="centerBig" fill="#f0f6fc">15.9k</text>
     <text x="162" y="226" text-anchor="middle" class="centerSmall" fill="#8b949e">commits</text>
@@ -28,24 +28,24 @@
     <g transform="translate(276 170)">
       <rect x="0" y="-10" width="10" height="10" rx="2" fill="#7c3aed"/>
       <text x="18" y="-8" class="body" fill="#f0f6fc">Private</text>
-      <text x="18" y="10" class="muted" fill="#8b949e">12,110 / 76.4%</text>
+      <text x="18" y="10" class="muted" fill="#8b949e">12,177 / 76.5%</text>
     </g>
   
     <g transform="translate(276 222)">
       <rect x="0" y="-10" width="10" height="10" rx="2" fill="#2fb8a6"/>
       <text x="18" y="-8" class="body" fill="#f0f6fc">Public</text>
-      <text x="18" y="10" class="muted" fill="#8b949e">3,746 / 23.6%</text>
+      <text x="18" y="10" class="muted" fill="#8b949e">3,746 / 23.5%</text>
     </g>
   <text x="536" y="119" class="section" fill="#f0f6fc">Language mix</text>
   <g>
-    <path d="M 632 211 L 632.000 139.000 A 72 72 0 0 1 646.671 281.489 Z" fill="#636c76"/>
-    <path d="M 632 211 L 646.671 281.489 A 72 72 0 0 1 586.753 267.006 Z" fill="#00add8"/>
-    <path d="M 632 211 L 586.753 267.006 A 72 72 0 0 1 562.050 228.059 Z" fill="#f1e05a"/>
-    <path d="M 632 211 L 562.050 228.059 A 72 72 0 0 1 564.722 185.355 Z" fill="#f05138"/>
-    <path d="M 632 211 L 564.722 185.355 A 72 72 0 0 1 585.248 156.244 Z" fill="#3572a5"/>
-    <path d="M 632 211 L 585.248 156.244 A 72 72 0 0 1 602.401 145.366 Z" fill="#e34c26"/>
-    <path d="M 632 211 L 602.401 145.366 A 72 72 0 0 1 612.599 141.663 Z" fill="#563d7c"/>
-    <path d="M 632 211 L 612.599 141.663 A 72 72 0 0 1 632.000 139.000 Z" fill="#8b5cf6"/>
+    <path d="M 632 211 L 632.000 139.000 A 72 72 0 0 1 655.157 279.175 Z" fill="#636c76"/>
+    <path d="M 632 211 L 655.157 279.175 A 72 72 0 0 1 595.922 273.309 Z" fill="#00add8"/>
+    <path d="M 632 211 L 595.922 273.309 A 72 72 0 0 1 562.906 231.248 Z" fill="#f1e05a"/>
+    <path d="M 632 211 L 562.906 231.248 A 72 72 0 0 1 563.175 189.854 Z" fill="#3572a5"/>
+    <path d="M 632 211 L 563.175 189.854 A 72 72 0 0 1 585.990 155.619 Z" fill="#f05138"/>
+    <path d="M 632 211 L 585.990 155.619 A 72 72 0 0 1 602.873 145.155 Z" fill="#e34c26"/>
+    <path d="M 632 211 L 602.873 145.155 A 72 72 0 0 1 612.667 141.644 Z" fill="#563d7c"/>
+    <path d="M 632 211 L 612.667 141.644 A 72 72 0 0 1 632.000 139.000 Z" fill="#8b5cf6"/>
     <circle cx="632" cy="211" r="42" fill="#111821" stroke="#30363d"/>
     <text x="632" y="207" text-anchor="middle" class="centerBig" fill="#f0f6fc">28</text>
     <text x="632" y="226" text-anchor="middle" class="centerSmall" fill="#8b949e">languages</text>
@@ -54,37 +54,37 @@
     <g transform="translate(780 140)">
       <rect x="0" y="-8" width="9" height="9" rx="2" fill="#636c76"/>
       <text x="17" y="0" class="body" fill="#f0f6fc">C</text>
-      <text x="132" y="0" text-anchor="end" class="muted" fill="#8b949e">46.7%</text>
+      <text x="132" y="0" text-anchor="end" class="muted" fill="#8b949e">44.8%</text>
     </g>
     <g transform="translate(780 160)">
       <rect x="0" y="-8" width="9" height="9" rx="2" fill="#00add8"/>
       <text x="17" y="0" class="body" fill="#f0f6fc">Go</text>
-      <text x="132" y="0" text-anchor="end" class="muted" fill="#8b949e">14.1%</text>
+      <text x="132" y="0" text-anchor="end" class="muted" fill="#8b949e">13.6%</text>
     </g>
     <g transform="translate(780 180)">
       <rect x="0" y="-8" width="9" height="9" rx="2" fill="#f1e05a"/>
       <text x="17" y="0" class="body" fill="#f0f6fc">JavaScript</text>
-      <text x="132" y="0" text-anchor="end" class="muted" fill="#8b949e">10.4%</text>
+      <text x="132" y="0" text-anchor="end" class="muted" fill="#8b949e">12.1%</text>
     </g>
     <g transform="translate(780 200)">
-      <rect x="0" y="-8" width="9" height="9" rx="2" fill="#f05138"/>
-      <text x="17" y="0" class="body" fill="#f0f6fc">Swift</text>
-      <text x="132" y="0" text-anchor="end" class="muted" fill="#8b949e">9.6%</text>
-    </g>
-    <g transform="translate(780 220)">
       <rect x="0" y="-8" width="9" height="9" rx="2" fill="#3572a5"/>
       <text x="17" y="0" class="body" fill="#f0f6fc">Python</text>
-      <text x="132" y="0" text-anchor="end" class="muted" fill="#8b949e">8.0%</text>
+      <text x="132" y="0" text-anchor="end" class="muted" fill="#8b949e">9.3%</text>
+    </g>
+    <g transform="translate(780 220)">
+      <rect x="0" y="-8" width="9" height="9" rx="2" fill="#f05138"/>
+      <text x="17" y="0" class="body" fill="#f0f6fc">Swift</text>
+      <text x="132" y="0" text-anchor="end" class="muted" fill="#8b949e">9.2%</text>
     </g>
     <g transform="translate(780 240)">
       <rect x="0" y="-8" width="9" height="9" rx="2" fill="#e34c26"/>
       <text x="17" y="0" class="body" fill="#f0f6fc">HTML</text>
-      <text x="132" y="0" text-anchor="end" class="muted" fill="#8b949e">4.5%</text>
+      <text x="132" y="0" text-anchor="end" class="muted" fill="#8b949e">4.4%</text>
     </g>
     <g transform="translate(780 260)">
       <rect x="0" y="-8" width="9" height="9" rx="2" fill="#563d7c"/>
       <text x="17" y="0" class="body" fill="#f0f6fc">CSS</text>
-      <text x="132" y="0" text-anchor="end" class="muted" fill="#8b949e">2.4%</text>
+      <text x="132" y="0" text-anchor="end" class="muted" fill="#8b949e">2.3%</text>
     </g>
     <g transform="translate(780 280)">
       <rect x="0" y="-8" width="9" height="9" rx="2" fill="#8b5cf6"/>
